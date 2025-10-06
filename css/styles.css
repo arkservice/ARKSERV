@@ -1,0 +1,267 @@
+/* Custom styles for Formation Manager - Optimized version */
+
+/* LAYOUT PRINCIPAL - Hauteur complète */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* SCROLLBAR PERSONNALISÉE POUR LA SIDEBAR */
+/* Webkit (Chrome, Safari, Edge) */
+.bg-gray-800 nav::-webkit-scrollbar {
+    width: 8px;
+}
+
+.bg-gray-800 nav::-webkit-scrollbar-track {
+    background: #1f2937; /* gray-800 */
+}
+
+.bg-gray-800 nav::-webkit-scrollbar-thumb {
+    background: #374151; /* gray-700 */
+    border-radius: 4px;
+}
+
+.bg-gray-800 nav::-webkit-scrollbar-thumb:hover {
+    background: #4b5563; /* gray-600 */
+}
+
+/* Firefox */
+.bg-gray-800 nav {
+    scrollbar-width: thin;
+    scrollbar-color: #374151 #1f2937; /* thumb track */
+}
+
+.group-section .group-header {
+    transition: background-color 0.2s ease-in-out;
+}
+
+.group-section .group-header:hover {
+    background-color: #f3f4f6;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 1000px;
+    }
+}
+
+.table-row:hover {
+    background-color: #f9fafb;
+}
+
+/* Styles pour les lignes d'en-tête de groupe dans la table unifiée */
+.group-header-row {
+    border-top: 2px solid #e5e7eb;
+}
+
+.group-header-row td {
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 500;
+}
+
+.group-header-row:hover td {
+    background-color: #f3f4f6;
+}
+
+/* Ligne de séparation entre les groupes - Optimized */
+.group-separator {
+    border: none !important;
+    background: transparent !important;
+}
+
+.group-separator-cell {
+    height: 12px;
+    padding: 0 !important;
+    border: none !important;
+    border-top: 1px solid #e5e7eb !important;
+    background-color: #f9fafb !important;
+}
+
+/* Performance optimization: Use will-change for animated elements */
+.group-section .group-content {
+    animation: slideDown 0.3s ease-out;
+    will-change: opacity, max-height;
+}
+
+.task-description-animated {
+    animation: taskDescriptionPulse 0.8s ease-in-out 3;
+    border-radius: 4px;
+    transition: all 0.3s ease-in-out;
+    will-change: transform, background-color, box-shadow;
+}
+
+.status-badge {
+    @apply px-2 py-1 rounded-full text-xs font-medium;
+}
+
+.status-todo {
+    background-color: #fce7f3; /* Rose clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-in_progress {
+    background-color: #fed7aa; /* Orange clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background-color: #dcfce7; /* Vert clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-cancelled {
+    @apply bg-red-100 text-red-800;
+}
+
+.status-planning {
+    @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-active {
+    @apply bg-green-100 text-green-800;
+}
+
+.status-on_hold {
+    @apply bg-orange-100 text-orange-800;
+}
+
+.priority-low {
+    background-color: #dcfce7; /* Vert clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.priority-medium {
+    background-color: #fed7aa; /* Orange clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.priority-high {
+    background-color: #fce7f3; /* Rose clair */
+    color: #000000; /* Noir */
+    padding: 4px 8px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.modal-overlay {
+    backdrop-filter: blur(4px);
+}
+
+/* Workflow visual colors for task rows */
+.workflow-task-completed {
+    @apply bg-green-50 border-l-4 border-green-400;
+}
+
+.workflow-task-completed:hover {
+    @apply bg-green-100;
+}
+
+.workflow-task-current {
+    @apply bg-orange-50 border-l-4 border-orange-400;
+}
+
+.workflow-task-current:hover {
+    @apply bg-orange-100;
+}
+
+.workflow-task-blocked {
+    @apply bg-gray-50 border-l-4 border-gray-300;
+    cursor: not-allowed;
+}
+
+.workflow-task-blocked:hover {
+    @apply bg-gray-100;
+}
+
+.workflow-task-blocked .table-cell {
+    @apply text-gray-500;
+}
+
+/* Styles pour le cercle du numéro d'ordre des tâches */
+.task-order-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 500;
+    color: white;
+    margin-right: 10px;
+}
+
+.task-order-circle.completed {
+    background-color: #10b981;
+}
+
+.task-order-circle.todo {
+    background-color: #f59e0b;
+}
+
+.task-order-circle.in_progress {
+    background-color: #3b82f6;
+}
+
+.task-order-circle.blocked {
+    background-color: #9ca3af;
+}
+
+/* Animation pour le feedback visuel des tâches après confirmation de RDV */
+@keyframes taskDescriptionPulse {
+    0% { 
+        transform: scale(1); 
+        background-color: rgba(34, 197, 94, 0.1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+    50% { 
+        transform: scale(1.02); 
+        background-color: rgba(34, 197, 94, 0.2);
+        box-shadow: 0 0 0 8px rgba(34, 197, 94, 0.1);
+    }
+    100% { 
+        transform: scale(1); 
+        background-color: rgba(34, 197, 94, 0.1);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    }
+}
+
+/* Classe pour mettre en évidence une tâche mise à jour */
+.task-row-highlighted {
+    background-color: rgba(34, 197, 94, 0.05) !important;
+    transition: background-color 0.3s ease-in-out;
+}

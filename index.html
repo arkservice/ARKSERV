@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formation Manager - Version HTML avec Supabase</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts pour signatures -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Allura&family=Sacramento&family=Pacifico&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel pour JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Supabase CDN -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- html2pdf.js CDN -->
+    <script async src="https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+    
+    <!-- jsPDF CDN pour génération PDF locale -->
+    <script async src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    
+    <!-- PDF.js CDN pour visualisation PDF -->
+    <script async src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- PDF-lib CDN pour manipulation PDF avancée -->
+    <script async src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <!-- Chart.js CDN pour graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <!-- Core Configuration -->
+    <script src="js/config/supabase.js"></script>
+    
+    <!-- Utilities (loaded first, no dependencies) -->
+    <script src="js/utils/dateUtils.js"></script>
+    <script src="js/utils/projectUtils.js"></script>
+    <script src="js/utils/pdfGenerator.js?v=compact-layout-2025"></script>
+    <script src="js/utils/pdfSigner.js"></script>
+    <script src="js/utils/taskWorkflowUtils.js"></script>
+    <script src="js/utils/signatureUtils.js"></script>
+    
+    <!-- Core Hooks (minimal dependencies) -->
+    <script src="js/hooks/useRealtime.js"></script>
+    <script src="js/hooks/useAuth.js"></script>
+    <script src="js/hooks/useUserProfile.js"></script>
+    <script src="js/hooks/useCurrentUserEntreprise.js"></script>
+    <script src="js/hooks/useCurrentUserRole.js"></script>
+
+    <!-- Generic CRUD Hook (used by data hooks) -->
+    <script src="js/hooks/useSimpleCRUD.js"></script>
+
+    <!-- Data Hooks (depend on core hooks) -->
+    <script src="js/hooks/useEntreprises.js"></script>
+    <script src="js/hooks/useServices.js"></script>
+    <script src="js/hooks/useMetierPdc.js"></script>
+    <script src="js/hooks/useTypePdc.js"></script>
+    <script src="js/hooks/useUsers.js"></script>
+    <script src="js/hooks/useLogiciels.js"></script>
+    <script src="js/hooks/useLogicielsWithCompetences.js"></script>
+    <script src="js/hooks/useProjects.js"></script>
+    <script src="js/hooks/useTasks.js"></script>
+    <script src="js/hooks/useUserCompetences.js"></script>
+    <script src="js/hooks/useUserPlanning.js"></script>
+    <script src="js/hooks/useAllPlanning.js"></script>
+    <script src="js/hooks/useArkanceUsers.js"></script>
+    <script src="js/hooks/usePdc.js"></script>
+    <script src="js/hooks/useFormation.js"></script>
+    <script src="js/hooks/useEvaluation.js"></script>
+    <script src="js/hooks/useFormateurs.js"></script>
+    <script src="js/hooks/useTemplates.js"></script>
+    <script src="js/hooks/useProjectSessions.js"></script>
+    
+    <!-- Task Workflow Hooks and Services -->
+    <script src="js/hooks/useTaskWorkflow.js"></script>
+    <script src="js/services/qualificationService.js"></script>
+    <script src="js/services/devisService.js"></script>
+    <script src="js/services/planificationService.js"></script>
+    <script src="js/services/documentGenerationService.js"></script>
+    <script src="js/services/documentSignatureService.js"></script>
+    <script src="js/services/addressAutocompleteService.js"></script>
+    
+    <!-- Task Specialized Components -->
+    <script src="js/components/tasks/QualificationTaskSection.js"></script>
+    <script src="js/components/tasks/DevisTaskSection.js"></script>
+    <script src="js/components/tasks/ValidationDevisTaskSection.js"></script>
+    <script src="js/components/tasks/PlanificationTaskSection.js"></script>
+    <script src="js/components/tasks/GenerationDocumentsTaskSection.js"></script>
+    <script src="js/components/tasks/ValidationDocumentsTaskSection.js"></script>
+    
+    <!-- Common Components (loaded early for reuse) -->
+    <script src="js/components/common/AddressAutocomplete.js"></script>
+    <script src="js/components/common/TableView.js"></script>
+    <script src="js/components/common/GroupedTableView.js"></script>
+    <script src="js/components/common/GroupingDropdown.js"></script>
+    <script src="js/components/common/SimpleCalendar.js"></script>
+    <script src="js/components/common/TimelineView.js"></script>
+    <script src="js/components/common/SignaturePad.js"></script>
+    <script src="js/components/common/PDFViewer.js"></script>
+    <script src="js/components/StarRating.js"></script>
+    <script src="js/components/common/SessionBookingWidget.js"></script>
+    <script src="js/components/common/RadarChart.js"></script>
+    <script src="js/components/common/Sidebar.js"></script>
+    <script src="js/components/common/RealtimeStatus.js"></script>
+    <script src="js/components/common/DetailPageHeader.js"></script>
+    <script src="js/components/common/CollapsibleEntrepriseSection.js"></script>
+    <script src="js/components/common/CollapsibleProjectSection.js"></script>
+    <script src="js/components/common/CollapsibleTaskSection.js"></script>
+    <script src="js/components/common/CollaboratorsSection.js"></script>
+
+    <!-- Generic Page Components (used by multiple pages) -->
+    <script src="js/components/pages/SimpleCRUDPage.js"></script>
+
+    <!-- Auth Provider (critical for app initialization) -->
+    <script src="js/components/AuthProvider.js"></script>
+
+    <!-- Generic Modal Components (used by multiple modals) -->
+    <script defer src="js/components/modals/SimpleFormModal.js"></script>
+
+    <!-- Modals (defer loading, not critical for initial render) -->
+    <script defer src="js/components/modals/LoginModal.js"></script>
+    <script defer src="js/components/modals/EntrepriseModal.js"></script>
+    <script defer src="js/components/modals/ServiceModal.js"></script>
+    <script defer src="js/components/modals/MetierPdcModal.js"></script>
+    <script defer src="js/components/modals/TypePdcModal.js"></script>
+    <script defer src="js/components/modals/ProjectModal.js"></script>
+    <script defer src="js/components/modals/TaskModal.js"></script>
+    <script defer src="js/components/modals/UserModal.js"></script>
+    <script defer src="js/components/modals/UserCompetenceModal.js"></script>
+    <script defer src="js/components/modals/UserPlanningModal.js"></script>
+    <script defer src="js/components/modals/UserSettingsModal.js"></script>
+    <script defer src="js/components/modals/PdcModal.js"></script>
+    <script defer src="js/components/modals/AddCompetenceModal.js"></script>
+
+    <!-- Pages (defer loading, loaded on demand) -->
+    <script defer src="js/components/pages/EntreprisesPage.js"></script>
+    <script defer src="js/components/pages/EntrepriseDetailPage.js"></script>
+    <script defer src="js/components/pages/ServicesPage.js"></script>
+    <script defer src="js/components/pages/MetierPdcPage.js"></script>
+    <script defer src="js/components/pages/TypePdcPage.js"></script>
+    <script defer src="js/components/pages/ProjectsPage.js"></script>
+    <script defer src="js/components/pages/ProjectDetailPage.js"></script>
+    <script defer src="js/components/pages/TasksPage.js"></script>
+    <script defer src="js/components/pages/TaskDetailPage.js"></script>
+    <script defer src="js/components/pages/LogicielsPage.js"></script>
+    <script defer src="js/components/pages/LogicielDetailPage.js"></script>
+    <script defer src="js/components/pages/UsersPage.js"></script>
+    <script defer src="js/components/pages/CollaborateursPage.js"></script>
+    <script defer src="js/components/pages/UserDetailPage.js"></script>
+    <script defer src="js/components/pages/PlanningPage.js"></script>
+    <script defer src="js/components/pages/PdcPage.js"></script>
+    <script defer src="js/components/pages/PdcDetailPage.js"></script>
+    <script defer src="js/components/pages/FormationPrepPage.js"></script>
+    <script defer src="js/components/pages/EvaluationFormPage.js"></script>
+    <script defer src="js/components/pages/EvaluationListPage.js"></script>
+    <script defer src="js/components/pages/TemplateBuilderPage.js"></script>
+    <script defer src="js/components/pages/AppointmentBookingPage.js"></script>
+    
+    <!-- Layout and App (loaded last) -->
+    <script src="js/components/Layout.js"></script>
+    <script src="js/app.js"></script>
+
+    <script type="text/babel">
+        // Initialisation de l'application après le chargement de tous les modules
+        window.addEventListener('load', function() {
+            // Attendre que tous les modules soient chargés
+            setTimeout(() => {
+                if (window.initializeApp) {
+                    window.initializeApp();
+                } else {
+                    console.error('Application non initialisée');
+                }
+            }, 100);
+        });
+    </script>
+</body>
+</html>

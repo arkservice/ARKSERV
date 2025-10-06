@@ -1,0 +1,30 @@
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Claude Code
+.claude/
+
+# MCP
+.mcp.json
+
+# Build and temp files
+dist/
+build/
+tmp/
+temp/
