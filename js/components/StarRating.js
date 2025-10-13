@@ -1,9 +1,9 @@
-// Composant de notation par chiffres (1-10)
+// Composant de notation par chiffres (1-5)
 function StarRating({ value, onChange, readonly = false, size = 'md' }) {
     const { useState } = React;
     const [hoverValue, setHoverValue] = useState(null);
 
-    const maxRating = 10;
+    const maxRating = 5;
 
     const handleClick = (rating) => {
         if (!readonly && onChange) {
@@ -41,7 +41,7 @@ function StarRating({ value, onChange, readonly = false, size = 'md' }) {
         // Déterminer le label à afficher
         let label = '';
         if (rating === 1) label = 'mauvais';
-        if (rating === 10) label = 'super';
+        if (rating === 5) label = 'super';
 
         return React.createElement('div', {
             key: rating,

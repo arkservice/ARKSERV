@@ -2,7 +2,11 @@
 function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
     const { useEffect } = React;
     const currentUserEntreprise = window.useCurrentUserEntreprise();
-    
+    const currentUserRole = window.useCurrentUserRole();
+
+    // IDs des items réservés aux admins uniquement
+    const adminOnlyItems = ['projets', 'taches', 'planning', 'template-builder', 'rapports'];
+
     const navigationSections = [
         {
             title: 'Gestion',
@@ -36,15 +40,16 @@ function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
             title: 'Outils',
             items: [
                 { id: 'template-builder', label: 'Template PDF', icon: 'file-text', indented: false },
-                { id: 'rapports', label: 'Rapports', icon: 'bar-chart-3', indented: false }
+                { id: 'rapports', label: 'Rapports', icon: 'bar-chart-3', indented: false },
+                { id: 'formulaire-eval', label: 'Formulaire Eval', icon: 'clipboard-check', indented: false }
             ]
         }
     ];
-    
+
     useEffect(() => {
         lucide.createIcons();
-    }, []);
-    
+    }, [currentUserRole.loading, currentUserEntreprise.loading]);
+
     return React.createElement('div', {
         className: "w-64 bg-gray-800 h-screen flex flex-col"
     }, [
@@ -86,7 +91,15 @@ function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
                 React.createElement('ul', {
                     key: 'section-items',
                     className: "space-y-2"
-                }, section.items.map(item =>
+                }, section.items
+                    .filter(item => {
+                        // Filtrer les items réservés aux admins si l'utilisateur n'est pas admin
+                        if (adminOnlyItems.includes(item.id) && !currentUserRole.isAdminRole) {
+                            return false;
+                        }
+                        return true;
+                    })
+                    .map(item =>
                     React.createElement('li', { key: item.id },
                         React.createElement('button', {
                             onClick: () => onSectionChange(item.id),

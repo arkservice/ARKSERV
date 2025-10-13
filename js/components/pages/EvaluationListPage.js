@@ -1,9 +1,12 @@
 // Page de liste des évaluations
 function EvaluationListPage() {
     const { useState, useEffect } = React;
-    const { evaluations, loading, deleteEvaluation } = window.useEvaluation();
+    const { evaluations, loading, deleteEvaluation, updateFormateurQualiopi, getEvaluationById } = window.useEvaluation();
+    const { loadTemplateByType } = window.useTemplates();
+    const auth = window.useAuth();
 
     const [selectedEval, setSelectedEval] = useState(null);
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
     useEffect(() => {
         lucide.createIcons();
@@ -25,6 +28,45 @@ function EvaluationListPage() {
                 console.error('Erreur lors de la suppression:', err);
                 alert('Erreur lors de la suppression: ' + err.message);
             }
+        }
+    };
+
+    const handleExportPdf = async (evaluation) => {
+        if (!evaluation || !window.generateEvaluationPDF) {
+            alert('Générateur PDF non disponible');
+            return;
+        }
+
+        try {
+            setIsGeneratingPdf(true);
+
+            // Charger le template pour l'évaluation
+            const template = await loadTemplateByType('evaluation');
+
+            // Convertir le template en paramètres
+            const pdfParams = template ? convertTemplateToParams(template) : {};
+
+            // Générer le PDF
+            const pdfBlob = await window.generateEvaluationPDF(evaluation, pdfParams);
+
+            // Créer un nom de fichier descriptif
+            const fileName = `Evaluation_${evaluation.stagiaire_nom}_${evaluation.stagiaire_prenom}_${evaluation.formation?.prj || 'Formation'}.pdf`;
+
+            // Télécharger le fichier
+            const url = URL.createObjectURL(pdfBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+        } catch (err) {
+            console.error('Erreur lors de la génération du PDF:', err);
+            alert('Erreur lors de la génération du PDF: ' + err.message);
+        } finally {
+            setIsGeneratingPdf(false);
         }
     };
 
@@ -91,14 +133,39 @@ function EvaluationListPage() {
                 React.createElement('span', {
                     key: 'max',
                     className: 'text-sm text-gray-500'
-                }, '/ 10')
+                }, '/ 5')
             ])
+        },
+        {
+            key: 'statut',
+            label: 'Statut',
+            sortable: true,
+            render: (value) => {
+                const isTraitee = value === 'Traitée';
+                return React.createElement('span', {
+                    className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        isTraitee
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                    }`
+                }, value || 'À traiter');
+            }
         }
     ];
 
+    // Fonction pour rafraîchir l'évaluation sélectionnée
+    const handleRefreshEvaluation = async (evaluationId) => {
+        try {
+            const refreshedEval = await getEvaluationById(evaluationId);
+            setSelectedEval(refreshedEval);
+        } catch (err) {
+            console.error('Erreur lors du rafraîchissement:', err);
+        }
+    };
+
     // Si vue détaillée
     if (selectedEval) {
-        return createDetailView(selectedEval, handleCloseDetail);
+        return createDetailView(selectedEval, handleCloseDetail, auth, updateFormateurQualiopi, handleRefreshEvaluation, handleExportPdf, isGeneratingPdf);
     }
 
     // Vue tableau
@@ -115,7 +182,7 @@ function EvaluationListPage() {
 }
 
 // Vue détaillée d'une évaluation
-function createDetailView(evaluation, onClose) {
+function createDetailView(evaluation, onClose, auth, updateFormateurQualiopi, onRefresh, onExportPdf, isGeneratingPdf) {
     return React.createElement('div', {
         className: "space-y-6"
     }, [
@@ -124,17 +191,39 @@ function createDetailView(evaluation, onClose) {
             key: 'header',
             className: "bg-white rounded-lg border border-gray-200 p-6"
         }, [
-            React.createElement('button', {
-                key: 'back',
-                onClick: onClose,
-                className: "inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
+            React.createElement('div', {
+                key: 'top-row',
+                className: "flex items-center justify-between mb-4"
             }, [
-                React.createElement('i', {
-                    key: 'icon',
-                    'data-lucide': 'arrow-left',
-                    className: "w-4 h-4"
-                }),
-                "Retour à la liste"
+                React.createElement('button', {
+                    key: 'back',
+                    onClick: onClose,
+                    className: "inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+                }, [
+                    React.createElement('i', {
+                        key: 'icon',
+                        'data-lucide': 'arrow-left',
+                        className: "w-4 h-4"
+                    }),
+                    "Retour à la liste"
+                ]),
+                React.createElement('button', {
+                    key: 'export',
+                    onClick: () => onExportPdf(evaluation),
+                    disabled: isGeneratingPdf,
+                    className: `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        isGeneratingPdf
+                            ? 'bg-blue-400 text-white cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`
+                }, [
+                    React.createElement('i', {
+                        key: 'icon',
+                        'data-lucide': isGeneratingPdf ? 'loader-2' : 'download',
+                        className: `w-4 h-4 ${isGeneratingPdf ? 'animate-spin' : ''}`
+                    }),
+                    isGeneratingPdf ? 'Génération...' : 'Télécharger PDF'
+                ])
             ]),
             React.createElement('h1', {
                 key: 'title',
@@ -262,7 +351,13 @@ function createDetailView(evaluation, onClose) {
                 ], evaluation.satisf_commentaires),
 
                 // Section Qualiopi
-                createQualiopiSection(evaluation)
+                React.createElement(QualiopiSection, {
+                    key: 'qualiopi',
+                    evaluation: evaluation,
+                    auth: auth,
+                    updateFormateurQualiopi: updateFormateurQualiopi,
+                    onRefresh: onRefresh
+                })
             ].filter(Boolean))
         ])
     ]);
@@ -285,11 +380,11 @@ function createInfoItem(label, value) {
 }
 
 function createStatCard(title, value, isMain = false) {
-    const bgColor = value >= 8 ? 'bg-green-50 border-green-200' :
-                     value >= 6 ? 'bg-yellow-50 border-yellow-200' :
+    const bgColor = value >= 4 ? 'bg-green-50 border-green-200' :
+                     value >= 3 ? 'bg-yellow-50 border-yellow-200' :
                      'bg-red-50 border-red-200';
-    const textColor = value >= 8 ? 'text-green-900' :
-                       value >= 6 ? 'text-yellow-900' :
+    const textColor = value >= 4 ? 'text-green-900' :
+                       value >= 3 ? 'text-yellow-900' :
                        'text-red-900';
 
     return React.createElement('div', {
@@ -307,7 +402,7 @@ function createStatCard(title, value, isMain = false) {
         React.createElement('div', {
             key: 'max',
             className: `text-xs ${textColor} opacity-75`
-        }, "/ 10")
+        }, "/ 5")
     ]);
 }
 
@@ -334,7 +429,7 @@ function createDetailSection(title, items, comments) {
                 React.createElement('span', {
                     key: 'value',
                     className: "font-medium text-gray-900"
-                }, item.isText ? item.value : `${item.value || '-'} / 10`)
+                }, item.isText ? item.value : `${item.value || '-'} / 5`)
             ])
         )),
         comments && React.createElement('div', {
@@ -353,11 +448,78 @@ function createDetailSection(title, items, comments) {
     ]);
 }
 
-function createQualiopiSection(evaluation) {
+// Composant React pour la section Qualiopi
+function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh }) {
+    const { useState } = React;
     const themes = evaluation.qualiopi_themes || {};
     const themeKeys = Object.keys(themes);
 
     if (themeKeys.length === 0) return null;
+
+    // Vérifier si l'utilisateur connecté est le formateur de cette formation
+    const isFormateur = auth.user?.id === evaluation.formation?.formateur?.id;
+    const isTraitee = evaluation.statut === 'Traitée';
+
+    // État pour les notes du formateur (initialisé avec les valeurs existantes ou vide)
+    const [formateurThemes, setFormateurThemes] = useState(() => {
+        if (evaluation.qualiopi_formateur_themes) {
+            return evaluation.qualiopi_formateur_themes;
+        }
+        // Initialiser avec la structure des thèmes stagiaire
+        const initThemes = {};
+        themeKeys.forEach(key => {
+            initThemes[key] = {
+                titre: themes[key].titre,
+                note: null
+            };
+        });
+        return initThemes;
+    });
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState(null);
+
+    const handleFormateurNoteChange = (themeKey, note) => {
+        setFormateurThemes(prev => ({
+            ...prev,
+            [themeKey]: {
+                ...prev[themeKey],
+                note: note
+            }
+        }));
+    };
+
+    const handleSaveFormateurEvaluation = async () => {
+        try {
+            setIsSaving(true);
+            setSaveError(null);
+
+            // Vérifier que toutes les notes sont remplies
+            const allFilled = themeKeys.every(key => formateurThemes[key]?.note !== null);
+            if (!allFilled) {
+                setSaveError('Veuillez remplir toutes les évaluations avant de sauvegarder');
+                return;
+            }
+
+            await updateFormateurQualiopi(
+                evaluation.id,
+                formateurThemes,
+                auth.user.id,
+                evaluation.formation.formateur.id
+            );
+
+            // Rafraîchir l'évaluation pour afficher les changements
+            if (onRefresh) {
+                await onRefresh(evaluation.id);
+            }
+
+            alert('Évaluation formateur enregistrée avec succès !');
+        } catch (err) {
+            console.error('Erreur lors de la sauvegarde:', err);
+            setSaveError(err.message || 'Erreur lors de la sauvegarde');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return React.createElement('div', {
         key: 'qualiopi'
@@ -385,10 +547,11 @@ function createQualiopiSection(evaluation) {
             }, "Auto-évaluation du stagiaire de ses connaissances à l'entrée et à la sortie de la formation.")
         ]),
 
-        // Graphique radar
+        // Graphique radar (avec 3 lignes si formateur a complété)
         React.createElement(window.RadarChart, {
             key: 'radar',
-            themes: themes
+            themes: themes,
+            formateurThemes: evaluation.qualiopi_formateur_themes
         }),
 
         // Thèmes
@@ -457,9 +620,76 @@ function createQualiopiSection(evaluation) {
                         key: 'value',
                         className: "font-bold"
                     }, `${progressionSign}${progression}`)
+                ]),
+
+                // Section formateur éditable (si formateur ET non traitée)
+                isFormateur && !isTraitee && React.createElement('div', {
+                    key: 'formateur-input',
+                    className: "mt-3 pt-3 border-t border-blue-200"
+                }, [
+                    React.createElement('label', {
+                        key: 'label',
+                        className: "block text-sm font-medium text-blue-900 mb-2"
+                    }, "Évaluation formateur"),
+                    React.createElement(window.QualiopiRating, {
+                        key: 'rating',
+                        value: formateurThemes[themeKey]?.note,
+                        onChange: (value) => handleFormateurNoteChange(themeKey, value),
+                        size: 'sm'
+                    })
+                ]),
+
+                // Section formateur lecture seule (si traitée)
+                isTraitee && evaluation.qualiopi_formateur_themes?.[themeKey] && React.createElement('div', {
+                    key: 'formateur-readonly',
+                    className: "mt-2 pt-2 border-t border-gray-200 flex justify-between items-center text-sm"
+                }, [
+                    React.createElement('span', {
+                        key: 'label',
+                        className: "text-gray-700"
+                    }, "Évaluation formateur"),
+                    React.createElement('span', {
+                        key: 'value',
+                        className: "font-medium text-green-700"
+                    }, `${evaluation.qualiopi_formateur_themes[themeKey]?.note || 0} / 5`)
                 ])
             ]);
-        }))
+        })),
+
+        // Message d'erreur global (si formateur en mode édition)
+        isFormateur && !isTraitee && saveError && React.createElement('div', {
+            key: 'error-global',
+            className: "mt-4 bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-800"
+        }, saveError),
+
+        // Bouton sauvegarder global (si formateur en mode édition)
+        isFormateur && !isTraitee && React.createElement('div', {
+            key: 'save-button',
+            className: "mt-6 flex justify-end"
+        }, React.createElement('button', {
+            onClick: handleSaveFormateurEvaluation,
+            disabled: isSaving,
+            className: `inline-flex items-center gap-2 px-8 py-3 text-base font-medium text-white rounded-lg transition-colors ${
+                isSaving
+                    ? 'bg-blue-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+            }`
+        }, [
+            React.createElement('i', {
+                key: 'icon',
+                'data-lucide': isSaving ? 'loader-2' : 'save',
+                className: `w-5 h-5 ${isSaving ? 'animate-spin' : ''}`
+            }),
+            isSaving ? "Enregistrement..." : "Enregistrer l'évaluation formateur"
+        ])),
+
+        // Message si pas formateur
+        !isFormateur && !isTraitee && React.createElement('div', {
+            key: 'not-formateur-message',
+            className: "mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4 text-center"
+        }, React.createElement('p', {
+            className: "text-sm text-gray-600"
+        }, "Seul le formateur de cette formation peut compléter l'évaluation Qualiopi."))
     ]);
 }
 
@@ -467,6 +697,57 @@ function calculateAverage(values) {
     const validValues = values.filter(v => v !== null && v !== undefined);
     if (validValues.length === 0) return null;
     return validValues.reduce((sum, v) => sum + v, 0) / validValues.length;
+}
+
+// Convertir le template en paramètres pour le générateur PDF
+function convertTemplateToParams(template) {
+    if (!template) return {};
+
+    return {
+        titleSize: template.styles?.titleSize || 28,
+        subtitleSize: template.styles?.subtitleSize || 16,
+        textSize: template.styles?.textSize || 8,
+        labelSize: template.styles?.labelSize || 8,
+        descriptionSize: template.styles?.descriptionSize || 7,
+        headerSize: template.styles?.headerSize || 24,
+        footerSize: template.styles?.footerSize || 9,
+        articleSize: template.styles?.articleSize || 11,
+        primaryColor: template.colors?.primary || '#133e5e',
+        secondaryColor: template.colors?.secondary || '#2563eb',
+        grayColor: template.colors?.text || '#374151',
+        lightGrayColor: template.colors?.lightText || '#6b7280',
+        headerTextColor: template.colors?.headerText || '#1f2937',
+        backgroundColor: template.colors?.background || '#f9fafb',
+        borderColor: template.colors?.border || '#e5e7eb',
+        infoBackground: template.colors?.infoBackground || '#f3f4f6',
+        tableHeader: template.colors?.tableHeader || '#f3f4f6',
+        marginTop: template.spacing?.marginTop || 20,
+        marginSide: template.spacing?.marginSide || 20,
+        marginBottom: template.spacing?.marginBottom || 30,
+        headerHeight: template.spacing?.headerHeight || 35,
+        footerHeight: template.spacing?.footerHeight || 40,
+        sectionSpacing: template.spacing?.sectionSpacing || 15,
+        lineSpacing: template.spacing?.lineSpacing || 5,
+        columnSpacing: template.spacing?.columnSpacing || 5,
+        blockPadding: template.spacing?.blockPadding || 10,
+        tableSpacing: template.spacing?.tableSpacing || 6,
+        pageFormat: template.layout?.pageFormat || 'a4',
+        orientation: template.layout?.orientation || 'portrait',
+        columns: template.layout?.columns || 3,
+        showHeader: template.layout?.showHeader !== false,
+        showFooter: template.layout?.showFooter !== false,
+        showLogos: template.layout?.showLogos !== false,
+        backgroundBlocks: template.layout?.backgroundBlocks !== false,
+        companyName: template.branding?.companyName || 'AUTODESK',
+        partnerText: template.branding?.partnerText || 'Platinum Partner',
+        brandName: template.branding?.brandName || 'ARKANCE',
+        footerAddress: template.branding?.footerAddress || 'LE VAL SAINT QUENTIN - Bâtiment C - 2, rue René Caudron - CS 30764 - 78961 Voisins-le-Bretonneux Cedex',
+        footerContact: template.branding?.footerContact || 'www.arkance-systems.fr - formation@arkance-systems.com - Tél. : 01 39 44 18 18',
+        headerLogoLeft: template.header_image,
+        headerLogoRight: null,
+        footerLogoLeft: template.footer_image,
+        footerLogoRight: null
+    };
 }
 
 // Export global

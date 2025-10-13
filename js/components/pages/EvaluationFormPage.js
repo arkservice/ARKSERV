@@ -255,7 +255,7 @@ function EvaluationFormPage({ token }) {
     }
 
     return React.createElement('div', {
-        className: "min-h-screen py-8 px-4",
+        className: "py-8 px-4",
         style: { backgroundColor: '#133f5c' }
     }, React.createElement('div', {
         className: "max-w-4xl mx-auto space-y-6"
@@ -916,5 +916,11 @@ function createRatingQuestion(label, value, onChange) {
     ]);
 }
 
-// Export global
+// Exports globaux
 window.EvaluationFormPage = EvaluationFormPage;
+window.createSection01 = createSection01;
+window.createSection02 = createSection02;
+window.createSection03 = createSection03;
+window.createSection04 = createSection04;
+window.createSectionQualiopi = createSectionQualiopi;
+window.createRatingQuestion = createRatingQuestion;

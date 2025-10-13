@@ -195,7 +195,7 @@ function TemplateBuilderPage() {
                     const emargementData = await getEmargementDataFromProject(selectedProject, getSessionsForProject);
                     pdfBlob = await window.generateEmargementPDF(emargementData, pdfParams);
                     break;
-                    
+
                 default:
                     showNotification('Type de document non supporté', 'error');
                     return;
@@ -660,7 +660,7 @@ function TemplateBuilderPage() {
             if ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) {
                 return;
             }
-            
+
             const timeoutId = setTimeout(() => {
                 generatePreview();
             }, 500);
@@ -794,7 +794,7 @@ function TemplateBuilderPage() {
                                 )
                             )
                     ) : (selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') ? (
-                        projectsLoading ? 
+                        projectsLoading ?
                             React.createElement('div', { className: 'text-center py-4' }, 'Chargement des projets...') :
                             React.createElement('div', { className: 'space-y-3' },
                                 React.createElement('select', {
@@ -806,10 +806,10 @@ function TemplateBuilderPage() {
                                     className: 'w-full p-2 border border-gray-300 rounded-md'
                                 },
                                     React.createElement('option', { value: '' }, 'Sélectionner un projet...'),
-                                    projects?.map(project => 
-                                        React.createElement('option', { 
-                                            key: project.id, 
-                                            value: project.id 
+                                    projects?.map(project =>
+                                        React.createElement('option', {
+                                            key: project.id,
+                                            value: project.id
                                         }, `${project.name} - ${project.entreprise?.nom || 'N/A'} (${project.nombre_stagiaire || 0} stagiaires)`)
                                     )
                                 ),
@@ -905,13 +905,13 @@ function TemplateBuilderPage() {
                     
                     React.createElement('div', { className: 'border border-gray-200 rounded-lg overflow-hidden flex-1' },
                         (selectedDocumentType === 'pdc' && !selectedPdc) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' }, 
+                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                 'Sélectionnez un PDC pour commencer') :
                         ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' }, 
+                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                 'Sélectionnez un projet pour commencer') :
                         (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement')) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' }, 
+                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                 'Sélectionnez un type de document pour commencer') :
                         isGenerating ?
                             React.createElement('div', { className: 'flex items-center justify-center h-full' },

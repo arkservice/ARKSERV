@@ -29,6 +29,7 @@ function useEvaluation() {
                             logiciel:logiciel_id(nom, logo)
                         ),
                         formateur:formateur_id(
+                            id,
                             nom,
                             prenom,
                             email
@@ -110,6 +111,7 @@ function useEvaluation() {
                             logiciel:logiciel_id(nom, logo)
                         ),
                         formateur:formateur_id(
+                            id,
                             nom,
                             prenom,
                             email
@@ -188,6 +190,38 @@ function useEvaluation() {
             await fetchEvaluations();
         } catch (err) {
             console.error('Erreur lors de la suppression de l\'évaluation:', err);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    // Mettre à jour l'évaluation Qualiopi du formateur
+    const updateFormateurQualiopi = async (evaluationId, formateurThemes, currentUserId, formateurId) => {
+        try {
+            setError(null);
+
+            // Vérifier que l'utilisateur connecté est bien le formateur de la formation
+            if (currentUserId !== formateurId) {
+                throw new Error('Seul le formateur de cette formation peut compléter cette évaluation');
+            }
+
+            // Mettre à jour l'évaluation avec les notes du formateur
+            const { data, error: updateError } = await supabase
+                .from('evaluation')
+                .update({
+                    qualiopi_formateur_themes: formateurThemes,
+                    statut: 'Traitée',
+                    formateur_completed_at: new Date().toISOString()
+                })
+                .eq('id', evaluationId)
+                .select()
+                .single();
+
+            if (updateError) throw updateError;
+            await fetchEvaluations();
+            return data;
+        } catch (err) {
+            console.error('Erreur lors de la mise à jour de l\'évaluation formateur:', err);
             setError(err.message);
             throw err;
         }
@@ -291,6 +325,7 @@ function useEvaluation() {
         createEvaluation,
         updateEvaluation,
         deleteEvaluation,
+        updateFormateurQualiopi,
         calculateSessionStats
     };
 }

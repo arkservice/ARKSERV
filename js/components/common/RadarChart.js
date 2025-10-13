@@ -1,5 +1,5 @@
 // Composant graphique radar pour Qualiopi
-function RadarChart({ themes }) {
+function RadarChart({ themes, formateurThemes }) {
     const { useRef, useEffect } = React;
     const canvasRef = useRef(null);
     const chartRef = useRef(null);
@@ -19,6 +19,7 @@ function RadarChart({ themes }) {
         });
         const dataAvant = themeKeys.map(key => themes[key].avant || 0);
         const dataApres = themeKeys.map(key => themes[key].apres || 0);
+        const dataFormateur = formateurThemes ? themeKeys.map(key => formateurThemes[key]?.note || 0) : null;
 
         // Détruire le graphique existant s'il existe
         if (chartRef.current) {
@@ -27,34 +28,53 @@ function RadarChart({ themes }) {
 
         // Créer le nouveau graphique
         const ctx = canvasRef.current.getContext('2d');
+
+        // Construire les datasets (2 ou 3 selon si formateur a complété)
+        const datasets = [
+            {
+                label: 'À l\'entrée en formation',
+                data: dataAvant,
+                borderColor: 'rgb(236, 72, 153)', // Rose
+                backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgb(236, 72, 153)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(236, 72, 153)'
+            },
+            {
+                label: 'À la sortie de formation',
+                data: dataApres,
+                borderColor: 'rgb(59, 130, 246)', // Bleu
+                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgb(59, 130, 246)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(59, 130, 246)'
+            }
+        ];
+
+        // Ajouter le dataset formateur s'il existe
+        if (dataFormateur) {
+            datasets.push({
+                label: 'Évaluation formateur',
+                data: dataFormateur,
+                borderColor: 'rgb(34, 197, 94)', // Vert
+                backgroundColor: 'rgba(34, 197, 94, 0.2)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgb(34, 197, 94)',
+                pointBorderColor: '#fff',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: 'rgb(34, 197, 94)'
+            });
+        }
+
         chartRef.current = new Chart(ctx, {
             type: 'radar',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'À l\'entrée en formation',
-                        data: dataAvant,
-                        borderColor: 'rgb(236, 72, 153)', // Rose
-                        backgroundColor: 'rgba(236, 72, 153, 0.2)',
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgb(236, 72, 153)',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: 'rgb(236, 72, 153)'
-                    },
-                    {
-                        label: 'À la sortie de formation',
-                        data: dataApres,
-                        borderColor: 'rgb(59, 130, 246)', // Bleu
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgb(59, 130, 246)',
-                        pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: 'rgb(59, 130, 246)'
-                    }
-                ]
+                datasets: datasets
             },
             options: {
                 responsive: true,
@@ -104,7 +124,7 @@ function RadarChart({ themes }) {
                 chartRef.current.destroy();
             }
         };
-    }, [themes]);
+    }, [themes, formateurThemes]);
 
     return React.createElement('div', {
         className: "bg-white rounded-lg border border-gray-200 p-6 mb-4"

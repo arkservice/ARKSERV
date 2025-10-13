@@ -439,6 +439,8 @@ function Layout() {
                 return React.createElement(window.FormationPrepPage);
             case 'evaluations':
                 return React.createElement(window.EvaluationListPage);
+            case 'formulaire-eval':
+                return React.createElement(window.EvaluationFormPreview);
             case 'rapports':
                 return React.createElement('div', {
                     className: "bg-white rounded-lg border border-gray-200 p-8"
