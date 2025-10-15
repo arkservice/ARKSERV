@@ -53,7 +53,14 @@
     <!-- Utilities (loaded first, no dependencies) -->
     <script src="js/utils/dateUtils.js"></script>
     <script src="js/utils/projectUtils.js"></script>
-    <script src="js/utils/pdfGenerator.js?v=compact-layout-2025"></script>
+    <!-- PDF Generators (loaded in order: core first, then generators) -->
+    <script src="js/utils/pdf/pdfCore.js"></script>
+    <script src="js/utils/pdf/pdfProgramme.js"></script>
+    <script src="js/utils/pdf/pdfConvocation.js"></script>
+    <script src="js/utils/pdf/pdfConvention.js"></script>
+    <script src="js/utils/pdf/pdfEmargement.js"></script>
+    <script src="js/utils/pdf/pdfEvaluation.js"></script>
+    <script src="js/utils/pdf/pdfQualiopi.js"></script>
     <script src="js/utils/pdfSigner.js"></script>
     <script src="js/utils/taskWorkflowUtils.js"></script>
     <script src="js/utils/signatureUtils.js"></script>

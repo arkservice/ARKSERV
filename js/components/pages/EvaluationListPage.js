@@ -70,6 +70,45 @@ function EvaluationListPage() {
         }
     };
 
+    const handleExportQualiopi = async (evaluation) => {
+        if (!evaluation || !window.generateQualiopiPDF) {
+            alert('Générateur PDF Qualiopi non disponible');
+            return;
+        }
+
+        try {
+            setIsGeneratingPdf(true);
+
+            // Charger le template Qualiopi
+            const template = await loadTemplateByType('qualiopi');
+
+            // Convertir le template en paramètres
+            const pdfParams = template ? convertTemplateToParams(template) : {};
+
+            // Générer le PDF Qualiopi
+            const pdfBlob = await window.generateQualiopiPDF(evaluation, pdfParams);
+
+            // Créer un nom de fichier descriptif
+            const fileName = `Qualiopi_${evaluation.stagiaire_nom}_${evaluation.stagiaire_prenom}_${evaluation.formation?.prj || 'Formation'}.pdf`;
+
+            // Télécharger le fichier
+            const url = URL.createObjectURL(pdfBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+        } catch (err) {
+            console.error('Erreur lors de la génération du PDF Qualiopi:', err);
+            alert('Erreur lors de la génération du PDF Qualiopi: ' + err.message);
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    };
+
     // Configuration des colonnes du tableau
     const columns = [
         {
@@ -165,7 +204,7 @@ function EvaluationListPage() {
 
     // Si vue détaillée
     if (selectedEval) {
-        return createDetailView(selectedEval, handleCloseDetail, auth, updateFormateurQualiopi, handleRefreshEvaluation, handleExportPdf, isGeneratingPdf);
+        return createDetailView(selectedEval, handleCloseDetail, auth, updateFormateurQualiopi, handleRefreshEvaluation, handleExportPdf, handleExportQualiopi, isGeneratingPdf);
     }
 
     // Vue tableau
@@ -182,7 +221,7 @@ function EvaluationListPage() {
 }
 
 // Vue détaillée d'une évaluation
-function createDetailView(evaluation, onClose, auth, updateFormateurQualiopi, onRefresh, onExportPdf, isGeneratingPdf) {
+function createDetailView(evaluation, onClose, auth, updateFormateurQualiopi, onRefresh, onExportPdf, onExportQualiopi, isGeneratingPdf) {
     return React.createElement('div', {
         className: "space-y-6"
     }, [
@@ -207,22 +246,45 @@ function createDetailView(evaluation, onClose, auth, updateFormateurQualiopi, on
                     }),
                     "Retour à la liste"
                 ]),
-                React.createElement('button', {
-                    key: 'export',
-                    onClick: () => onExportPdf(evaluation),
-                    disabled: isGeneratingPdf,
-                    className: `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        isGeneratingPdf
-                            ? 'bg-blue-400 text-white cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`
+                // Boutons d'export
+                React.createElement('div', {
+                    key: 'export-buttons',
+                    className: "flex gap-2"
                 }, [
-                    React.createElement('i', {
-                        key: 'icon',
-                        'data-lucide': isGeneratingPdf ? 'loader-2' : 'download',
-                        className: `w-4 h-4 ${isGeneratingPdf ? 'animate-spin' : ''}`
-                    }),
-                    isGeneratingPdf ? 'Génération...' : 'Télécharger PDF'
+                    React.createElement('button', {
+                        key: 'export-eval',
+                        onClick: () => onExportPdf(evaluation),
+                        disabled: isGeneratingPdf,
+                        className: `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            isGeneratingPdf
+                                ? 'bg-blue-400 text-white cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`
+                    }, [
+                        React.createElement('i', {
+                            key: 'icon',
+                            'data-lucide': isGeneratingPdf ? 'loader-2' : 'download',
+                            className: `w-4 h-4 ${isGeneratingPdf ? 'animate-spin' : ''}`
+                        }),
+                        isGeneratingPdf ? 'Génération...' : 'PDF Évaluation'
+                    ]),
+                    React.createElement('button', {
+                        key: 'export-qualiopi',
+                        onClick: () => onExportQualiopi(evaluation),
+                        disabled: isGeneratingPdf,
+                        className: `inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            isGeneratingPdf
+                                ? 'bg-green-400 text-white cursor-not-allowed'
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                        }`
+                    }, [
+                        React.createElement('i', {
+                            key: 'icon',
+                            'data-lucide': isGeneratingPdf ? 'loader-2' : 'award',
+                            className: `w-4 h-4 ${isGeneratingPdf ? 'animate-spin' : ''}`
+                        }),
+                        isGeneratingPdf ? 'Génération...' : 'PDF Qualiopi'
+                    ])
                 ])
             ]),
             React.createElement('h1', {

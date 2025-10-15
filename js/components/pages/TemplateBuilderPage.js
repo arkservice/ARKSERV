@@ -12,6 +12,7 @@ function TemplateBuilderPage() {
     const [selectedDocumentType, setSelectedDocumentType] = useState('pdc');
     const [selectedPdc, setSelectedPdc] = useState(null);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [projectSessions, setProjectSessions] = useState([]);
     
     // Fonction pour afficher une notification
@@ -25,12 +26,14 @@ function TemplateBuilderPage() {
         { id: 'pdc', label: 'Plan de Cours (PDC)', icon: 'book-open', description: 'Templates pour les plans de cours de formation' },
         { id: 'convocation', label: 'Convocation', icon: 'users', description: 'Templates pour les convocations de formation' },
         { id: 'convention', label: 'Convention', icon: 'file-signature', description: 'Templates pour les conventions de formation professionnelle' },
-        { id: 'emargement', label: 'Émargement', icon: 'clipboard-check', description: 'Templates pour les feuilles d\'émargement par stagiaire' }
+        { id: 'emargement', label: 'Émargement', icon: 'clipboard-check', description: 'Templates pour les feuilles d\'émargement par stagiaire' },
+        { id: 'qualiopi', label: 'Évaluation Qualiopi', icon: 'award', description: 'Templates pour les évaluations Qualiopi (EVALUATION DES ACQUIS)' }
     ];
     
     // Hooks pour les données
     const { pdcs, loading: pdcsLoading } = window.usePdc();
     const { projects, loading: projectsLoading } = window.useProjects();
+    const { evaluations, loading: evaluationsLoading } = window.useEvaluation();
     const { getSessionsForProject } = window.useProjectSessions();
     const { 
         loadTemplateByType, 
@@ -51,7 +54,10 @@ function TemplateBuilderPage() {
         if (projects && projects.length > 0 && !selectedProject) {
             setSelectedProject(projects[0]);
         }
-    }, [pdcs, projects, selectedDocumentType]);
+        if (evaluations && evaluations.length > 0 && !selectedEvaluation) {
+            setSelectedEvaluation(evaluations[0]);
+        }
+    }, [pdcs, projects, evaluations, selectedDocumentType]);
     
     // Charger les sessions du projet sélectionné
     useEffect(() => {
@@ -196,6 +202,16 @@ function TemplateBuilderPage() {
                     pdfBlob = await window.generateEmargementPDF(emargementData, pdfParams);
                     break;
 
+                case 'qualiopi':
+                    if (!window.generateQualiopiPDF) {
+                        showNotification('Générateur Qualiopi non disponible', 'error');
+                        return;
+                    }
+                    // Utiliser l'évaluation sélectionnée ou les données par défaut
+                    const qualiopiData = selectedEvaluation || getDefaultQualiopiData();
+                    pdfBlob = await window.generateQualiopiPDF(qualiopiData, pdfParams);
+                    break;
+
                 default:
                     showNotification('Type de document non supporté', 'error');
                     return;
@@ -248,6 +264,50 @@ function TemplateBuilderPage() {
             cout: '0,00',
             tva: '0,00',
             total: '0,00'
+        };
+    };
+    
+    // Générer des données par défaut pour Qualiopi
+    const getDefaultQualiopiData = () => {
+        return {
+            stagiaire_nom: 'NION',
+            stagiaire_prenom: 'Emmanuel',
+            stagiaire_societe: 'Valdepharm',
+            stagiaire_email: 'enion.valdepharm@fareva.com',
+            formation: {
+                pdc: {
+                    ref: 'PC-FOR-12132-A-ALT25-4-GENERALISTE-SPECIFIQUE'
+                },
+                prj: 'PRJ-2025-001'
+            },
+            qualiopi_themes: {
+                theme_1: { titre: "Comprendre l'interface d'AutoCAD", avant: 0, apres: 4 },
+                theme_2: { titre: "Maîtriser les outils de dessin et de modification", avant: 0, apres: 4 },
+                theme_3: { titre: "Comprendre les outils de dessin paramétrique", avant: 0, apres: 2 },
+                theme_4: { titre: "Contrôler les commandes usuelles de l'interface", avant: 0, apres: 4 },
+                theme_5: { titre: "Savoir s'informer sur les différentes propriétés et mesures", avant: 0, apres: 4 },
+                theme_6: { titre: "Apprendre à gérer les éléments de bibliothèque Electrique et PID", avant: 0, apres: 4 },
+                theme_7: { titre: "Savoir annoter un plan", avant: 0, apres: 4 },
+                theme_8: { titre: "Maîtriser les PDF", avant: 0, apres: 4 },
+                theme_9: { titre: "Maîtriser l'utilisation des références externes et autres liens", avant: 0, apres: 4 },
+                theme_10: { titre: "Savoir mettre en page et imprimer", avant: 0, apres: 4 },
+                theme_11: { titre: "Utiliser les outils avancés", avant: 0, apres: 4 },
+                theme_12: { titre: "Savoir personnaliser AutoCAD", avant: 0, apres: 4 }
+            },
+            qualiopi_formateur_themes: {
+                theme_1: { note: 5 },
+                theme_2: { note: 5 },
+                theme_3: { note: 2 },
+                theme_4: { note: 5 },
+                theme_5: { note: 5 },
+                theme_6: { note: 5 },
+                theme_7: { note: 5 },
+                theme_8: { note: 5 },
+                theme_9: { note: 5 },
+                theme_10: { note: 5 },
+                theme_11: { note: 5 },
+                theme_12: { note: 5 }
+            }
         };
     };
     
@@ -666,7 +726,7 @@ function TemplateBuilderPage() {
             }, 500);
             return () => clearTimeout(timeoutId);
         }
-    }, [currentTemplate, selectedPdc, selectedProject, selectedDocumentType]);
+    }, [currentTemplate, selectedPdc, selectedProject, selectedEvaluation, selectedDocumentType]);
     
     // Auto-sauvegarde
     useEffect(() => {
@@ -884,8 +944,42 @@ function TemplateBuilderPage() {
                                     selectedProject.periode_souhaitee && React.createElement('div', {}, `• Période : ${selectedProject.periode_souhaitee}`)
                                 )
                             )
+                    ) : selectedDocumentType === 'qualiopi' ? (
+                        evaluationsLoading ?
+                            React.createElement('div', { className: 'text-center py-4' }, 'Chargement des évaluations...') :
+                            React.createElement('div', { className: 'space-y-3' },
+                                React.createElement('select', {
+                                    value: selectedEvaluation?.id || '',
+                                    onChange: (e) => {
+                                        const evaluation = evaluations.find(ev => ev.id === e.target.value);
+                                        setSelectedEvaluation(evaluation);
+                                    },
+                                    className: 'w-full p-2 border border-gray-300 rounded-md'
+                                },
+                                    React.createElement('option', { value: '' }, 'Sélectionner une évaluation...'),
+                                    evaluations?.map(evaluation =>
+                                        React.createElement('option', {
+                                            key: evaluation.id,
+                                            value: evaluation.id
+                                        }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'} - ${evaluation.formation?.prj || 'N/A'}`)
+                                    )
+                                ),
+                                selectedEvaluation && React.createElement('div', {
+                                    className: 'p-3 bg-purple-50 rounded-md text-sm text-purple-700'
+                                },
+                                    React.createElement('div', { className: 'font-medium mb-2' }, 'Données évaluation - Qualiopi'),
+                                    React.createElement('div', {}, `• Stagiaire : ${selectedEvaluation.stagiaire_prenom} ${selectedEvaluation.stagiaire_nom}`),
+                                    React.createElement('div', {}, `• Société : ${selectedEvaluation.stagiaire_societe || 'N/A'}`),
+                                    React.createElement('div', {}, `• Email : ${selectedEvaluation.stagiaire_email || 'N/A'}`),
+                                    React.createElement('div', {}, `• Formation : ${selectedEvaluation.formation?.pdc?.ref || 'N/A'}`),
+                                    React.createElement('div', {}, `• PRJ : ${selectedEvaluation.formation?.prj || 'N/A'}`),
+                                    selectedEvaluation.qualiopi_themes && React.createElement('div', {},
+                                        `• Thèmes : ${Object.keys(selectedEvaluation.qualiopi_themes).length} compétences évaluées`
+                                    )
+                                )
+                            )
                     ) : (
-                        React.createElement('div', { className: 'text-center py-4 text-gray-500' }, 
+                        React.createElement('div', { className: 'text-center py-4 text-gray-500' },
                             'Sélectionnez un type de document actif')
                     )
                 )
@@ -898,7 +992,7 @@ function TemplateBuilderPage() {
                         React.createElement('h2', { className: 'text-xl font-semibold' }, 'Prévisualisation PDF'),
                         React.createElement('button', {
                             onClick: generatePreview,
-                            disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject),
+                            disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation),
                             className: 'bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50'
                         }, isGenerating ? 'Génération...' : 'Actualiser')
                     ),
@@ -910,7 +1004,10 @@ function TemplateBuilderPage() {
                         ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) ?
                             React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                 'Sélectionnez un projet pour commencer') :
-                        (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement')) ?
+                        (selectedDocumentType === 'qualiopi' && !selectedEvaluation) ?
+                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                'Sélectionnez une évaluation pour commencer') :
+                        (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement' && selectedDocumentType !== 'qualiopi')) ?
                             React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                 'Sélectionnez un type de document pour commencer') :
                         isGenerating ?
