@@ -30,7 +30,7 @@ function DeleteIcon({ className = "w-4 h-4" }) {
 }
 
 // Composant GroupedTableView pour afficher les données groupées
-function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEdit, onDelete, onRowClick, getRowClassName, groupBy = 'entreprise', expandAll, statusOptions, onGroupChange, onExpandChange, entityType = 'projet', groupingOptions, customActions }) {
+function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEdit, onDelete, onRowClick, getRowClassName, groupBy = 'entreprise', expandAll, statusOptions, onGroupChange, onExpandChange, entityType = 'projet', groupingOptions, customActions, customGroupOrder, getDefaultExpandState }) {
     const { useState, useEffect, useMemo } = React;
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -77,12 +77,13 @@ function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEd
             groups[groupKey].push(row);
         });
         
-        // Tri des groupes par nom
-        const sortedGroups = Object.keys(groups).sort().reduce((acc, key) => {
+        // Tri des groupes (personnalisé si fourni, sinon alphabétique)
+        const sortFunction = customGroupOrder || ((a, b) => a.localeCompare(b));
+        const sortedGroups = Object.keys(groups).sort(sortFunction).reduce((acc, key) => {
             acc[key] = groups[key];
             return acc;
         }, {});
-        
+
         return sortedGroups;
     }, [filteredData, groupBy, statusOptions]);
     
@@ -110,10 +111,12 @@ function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEd
     useEffect(() => {
         const initialExpanded = {};
         Object.keys(groupedData).forEach(groupKey => {
-            initialExpanded[groupKey] = expandAll;
+            initialExpanded[groupKey] = getDefaultExpandState
+                ? getDefaultExpandState(groupKey, groupBy)
+                : expandAll;
         });
         setExpandedGroups(initialExpanded);
-    }, [groupedData, expandAll]);
+    }, [groupedData, expandAll, groupBy, getDefaultExpandState]);
     
     const handleSort = (key) => {
         if (sortKey === key) {

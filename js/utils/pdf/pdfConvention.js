@@ -3,8 +3,9 @@
 (function() {
     'use strict';
 
-    // Récupérer les utilitaires depuis window.pdfCore
+    // Récupérer les utilitaires depuis window.pdfCore et pdfSectionMapper
     const { hexToRgb, addImageToPdf } = window.pdfCore;
+    const { getSectionPositions } = window.pdfSectionMapper;
 
 async function generateConventionPDF(conventionData, layoutParams = {}) {
     console.log('🔧 [DEBUG] generateConventionPDF appelée');
@@ -41,6 +42,11 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
 
     const params = { ...defaultParams, ...layoutParams };
 
+    // Calculer les positions des sections depuis la configuration
+    const sections = params.sections || [];
+    const positions = getSectionPositions(sections);
+    console.log('📐 [pdfConvention] Positions calculées:', positions);
+
     // Créer le document PDF A4
     const doc = new jsPDF({
         orientation: 'portrait',
@@ -55,11 +61,37 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
     const primaryColor = hexToRgb(params.primaryColor) || params.primaryColor;
     const grayColor = hexToRgb(params.grayColor) || params.grayColor;
 
-    // Header avec logo
-    await addImageToPdf(doc, params.headerLogoLeft, 0, 0, pageWidth, 22, params.companyName);
+    // === SECTION HEADER ===
+    const headerSection = positions.header || { y: 0, height: 22, width: pageWidth };
 
-    // Titre principal
-    let yPos = 35;
+    // Add background if configured
+    if (params.headerBackground) {
+        const bgColor = hexToRgb(params.headerBackground) || params.headerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, headerSection.y, headerSection.width, headerSection.height, 'F');
+    }
+
+    // Handle padding
+    const headerPadding = params.headerPadding || 0;
+    const headerImageX = headerPadding;
+    const headerImageY = headerSection.y + headerPadding;
+    const headerImageWidth = headerSection.width - (2 * headerPadding);
+    const headerImageHeight = headerSection.height - (2 * headerPadding);
+
+    // Add logo with constraints
+    await addImageToPdf(
+        doc,
+        params.headerLogoLeft,
+        headerImageX,
+        headerImageY,
+        headerImageWidth,
+        headerImageHeight,
+        params.companyName
+    );
+
+    // === SECTION TITLE ===
+    const titleSection = positions.title || { y: 22, height: 40, width: pageWidth };
+    let yPos = titleSection.y + 13;
     doc.setFontSize(params.titleSize);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -74,8 +106,9 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
     doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
     doc.text(`${conventionData.numero || '202701 - PR-1234'}`, 20, yPos);
 
-    // Parties contractantes
-    yPos += 15;
+    // === SECTION PARTIES ===
+    const partiesSection = positions.parties || { y: 62, height: 55, width: pageWidth };
+    yPos = partiesSection.y + 3;
     doc.setFontSize(params.textSize);
     doc.setFont('helvetica', 'bold');
     doc.text('ENTRE LES SOUSSIGNÉS :', 20, yPos);
@@ -140,6 +173,9 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
     doc.setFont('helvetica', 'bold');
     doc.text('IL A ÉTÉ CONVENU ET ARRÊTÉ CE QUI SUIT :', 20, yPos);
 
+    // === SECTION ARTICLES ===
+    const articlesSection = positions.articles || { y: 117, height: 100, width: pageWidth };
+
     // Fonction utilitaire pour rendre du texte mixte (normal/gras)
     const renderMixedText = (segments, startX, startY, maxWidth) => {
         let currentX = startX;
@@ -175,8 +211,8 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
         return currentY + lineHeight;
     };
 
-    // Articles de la convention
-    yPos += 5;
+    // Articles de la convention - commencer dans la section articles
+    yPos = articlesSection.y + 5;
 
     // Données dynamiques pour les articles
     const listeStagiaires = conventionData.stagiaires || 'Liste des stagiaires à définir';
@@ -196,6 +232,19 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
 
     const programmeFormate = `Formation ${conventionData.editeur || 'Autodesk'} ${conventionData.logiciel || conventionData.formation || 'Logiciel'} 2025 - ${conventionData.type_pdc || 'Concepts de base'}`;
 
+    // Fonction helper pour formater les sessions détaillées de l'Article II
+    const renderSessionsDetails = (data) => {
+        if (data.sessionsFormattees && Array.isArray(data.sessionsFormattees)) {
+            return data.sessionsFormattees.map((session) => ({
+                text: session,
+                style: 'bold',
+                breakAfter: true
+            }));
+        }
+        // Fallback si pas de sessions détaillées
+        return [{ text: data.dates || 'Dates à définir selon planning', style: 'bold' }];
+    };
+
     const articles = [
         {
             titre: 'Article I',
@@ -206,7 +255,10 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
         },
         {
             titre: 'Article II',
-            contenu: `La durée de ce contrat sera de ${conventionData.duree || '5 jour(s)'} réparti(s) comme suit : ${datesSessions}`
+            segments: [
+                { text: `La durée de ce contrat sera de ${conventionData.duree || '5 jour(s)'} réparti(s) comme suit :`, style: 'normal', breakAfter: true },
+                ...renderSessionsDetails(conventionData)
+            ]
         },
         {
             titre: 'Article III',
@@ -219,7 +271,7 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
             titre: 'Article IV',
             segments: [
                 { text: `Le programme de la formation est le suivant : « ${programmeFormate} »`, style: 'normal', breakAfter: true },
-                { text: 'La formation se déroulera ', style: 'normal' },
+                { text: 'La formation se déroulera ', style: 'normal', breakAfter: true },
                 { text: lieuFormation, style: 'bold' }
             ]
         },
@@ -263,15 +315,16 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
         }
     });
 
-    // Tarifs
-    yPos += 10;
+    // === SECTION TARIFS ===
+    const tarifsSection = positions.tarifs || { y: 217, height: 60, width: pageWidth };
+    yPos = tarifsSection.y + 10;
     doc.setFont('helvetica', 'bold');
     doc.text('COÛT DE LA FORMATION :', 20, yPos);
     yPos += 8;
 
     doc.setFont('helvetica', 'normal');
     const tarifLines = [
-        `Formation ${conventionData.formation || 'Formation'} : ${conventionData.cout || '0,00'} €`,
+        `${conventionData.formation || 'Formation'} : ${conventionData.cout || '0,00'} €`,
         `TVA 20% : ${conventionData.tva || '0,00'} €`,
         `TOTAL TTC : ${conventionData.total || '0,00'} €`
     ];
@@ -289,8 +342,33 @@ async function generateConventionPDF(conventionData, layoutParams = {}) {
     doc.text('(Signature et cachet)', 50, yPos);
     doc.text('(Signature et cachet)', 150, yPos);
 
-    // Footer
-    await addImageToPdf(doc, params.footerLogoLeft, 0, pageHeight - 37, pageWidth, 37, params.footerContact);
+    // === SECTION FOOTER ===
+    const footerSection = positions.footer || { y: pageHeight - 37, height: 37, width: pageWidth };
+
+    // Add background if configured
+    if (params.footerBackground) {
+        const bgColor = hexToRgb(params.footerBackground) || params.footerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, footerSection.y, footerSection.width, footerSection.height, 'F');
+    }
+
+    // Handle padding
+    const footerPadding = params.footerPadding || 0;
+    const footerImageX = footerPadding;
+    const footerImageY = footerSection.y + footerPadding;
+    const footerImageWidth = footerSection.width - (2 * footerPadding);
+    const footerImageHeight = footerSection.height - (2 * footerPadding);
+
+    // Add logo with constraints
+    await addImageToPdf(
+        doc,
+        params.footerLogoLeft,
+        footerImageX,
+        footerImageY,
+        footerImageWidth,
+        footerImageHeight,
+        params.footerContact
+    );
 
     return doc.output('blob');
 }

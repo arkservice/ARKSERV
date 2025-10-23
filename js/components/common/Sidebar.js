@@ -1,8 +1,30 @@
 // Composant Sidebar
 function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
-    const { useEffect } = React;
+    const { useEffect, useState } = React;
     const currentUserEntreprise = window.useCurrentUserEntreprise();
     const currentUserRole = window.useCurrentUserRole();
+    const [logoUrl, setLogoUrl] = useState(null);
+
+    // Charger le logo Arkance depuis Supabase Storage
+    useEffect(() => {
+        const loadLogo = () => {
+            try {
+                if (window.supabaseConfig?.client) {
+                    const { data } = window.supabaseConfig.client.storage
+                        .from('logos')
+                        .getPublicUrl('logo arkance long transparent.png');
+
+                    if (data?.publicUrl) {
+                        setLogoUrl(data.publicUrl);
+                    }
+                }
+            } catch (err) {
+                console.error('Erreur lors du chargement du logo:', err);
+            }
+        };
+
+        loadLogo();
+    }, []);
 
     // IDs des items réservés aux admins uniquement
     const adminOnlyItems = ['projets', 'taches', 'planning', 'template-builder', 'rapports'];
@@ -22,6 +44,7 @@ function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
             items: [
                 { id: 'collaborateurs', label: 'Collaborateurs', icon: 'users', indented: false },
                 { id: 'services', label: 'Services', icon: 'layers', indented: false },
+                { id: 'agences', label: 'Agences', icon: 'building-2', indented: false },
                 { id: 'planning', label: 'Planning', icon: 'calendar', indented: false }
             ]
         },
@@ -57,10 +80,24 @@ function Sidebar({ activeSection, onSectionChange, onOpenSettings }) {
             key: 'header',
             className: "p-6 border-b border-gray-700"
         }, [
-            React.createElement('h1', {
-                key: 'title',
-                className: "text-xl font-bold text-white mb-2"
-            }, "ARKSERV"),
+            // Logo Arkance et titre
+            logoUrl && React.createElement('div', {
+                key: 'logo-title-container',
+                className: "flex items-center gap-3 mb-2"
+            }, [
+                React.createElement('img', {
+                    key: 'logo',
+                    src: logoUrl,
+                    alt: "Logo Arkance",
+                    className: "w-auto object-contain",
+                    style: { height: '33.6px' }
+                }),
+                React.createElement('h1', {
+                    key: 'title',
+                    className: "font-bold text-white",
+                    style: { letterSpacing: '0.1em', fontSize: '0.525rem' }
+                }, "TRAINING")
+            ]),
             React.createElement(UserProfile, { key: 'user-profile-header' })
         ]),
         

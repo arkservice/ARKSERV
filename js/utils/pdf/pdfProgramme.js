@@ -3,8 +3,9 @@
 (function() {
     'use strict';
 
-    // Récupérer les utilitaires depuis window.pdfCore
+    // Récupérer les utilitaires depuis window.pdfCore et pdfSectionMapper
     const { DEFAULT_PARAMS, hexToRgb, addImageToPdf } = window.pdfCore;
+    const { getSectionPositions } = window.pdfSectionMapper;
 
 // Fonction principale pour générer un PDF Programme de Cours
 async function generatePDFWithJsPDF(pdc, layoutParams = {}) {
@@ -25,6 +26,11 @@ async function generatePDFWithJsPDF(pdc, layoutParams = {}) {
     // Fusionner avec les paramètres personnalisés
     const params = { ...DEFAULT_PARAMS, ...layoutParams };
 
+    // Calculer les positions des sections depuis la configuration
+    const sections = params.sections || [];
+    const positions = getSectionPositions(sections);
+    console.log('📐 [pdfProgramme] Positions calculées:', positions);
+
     // Convertir les couleurs hex en RGB si nécessaire
     const primaryColor = hexToRgb(params.primaryColor) || params.primaryColor;
     const grayColor = hexToRgb(params.grayColor) || params.grayColor;
@@ -42,39 +48,54 @@ async function generatePDFWithJsPDF(pdc, layoutParams = {}) {
     const pageWidth = doc.internal.pageSize.getWidth();  // 210mm
     const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
 
-    // === SECTION 1: HEADER (0-22mm) ===
-    await renderSection1_Header(doc, params);
+    // === SECTION 1: HEADER ===
+    await renderSection1_Header(doc, params, positions);
 
-    // === SECTION 2: TITRE/SOUS-TITRE (22-50mm) ===
-    renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor);
+    // === SECTION 2: TITRE/SOUS-TITRE ===
+    renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor, positions);
 
-    // === SECTION 3: INFORMATIONS GÉNÉRALES (50-131mm) ===
-    renderSection3_Infos(doc, pdc, params, primaryColor, grayColor);
+    // === SECTION 3: INFORMATIONS GÉNÉRALES ===
+    renderSection3_Infos(doc, pdc, params, primaryColor, grayColor, positions);
 
-    // === SECTION 5: FOOTER (260-297mm) ===
+    // === SECTION 5: FOOTER ===
     // IMPORTANT: Dessiné AVANT la section 4 pour que le programme apparaisse PAR-DESSUS
-    await renderSection5_Footer(doc, params);
+    await renderSection5_Footer(doc, params, positions);
 
-    // === SECTION 4: PROGRAMME (131-268mm) ===
+    // === SECTION 4: PROGRAMME ===
     // Dessiné EN DERNIER pour se superposer au footer
-    renderSection4_Programme(doc, pdc, params, primaryColor, grayColor);
+    renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, positions);
 
     // Retourner le PDF en tant que Blob
     const pdfBlob = doc.output('blob');
     return pdfBlob;
 }
 
-// === SECTION 1: HEADER (210×22mm) ===
-async function renderSection1_Header(doc, params) {
+// === SECTION 1: HEADER ===
+async function renderSection1_Header(doc, params, positions) {
+    const headerSection = positions.header || { y: 0, height: 22, width: 210 };
+
+    // Add background if configured
+    if (params.headerBackground) {
+        const bgColor = hexToRgb(params.headerBackground) || params.headerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, headerSection.y, headerSection.width, headerSection.height, 'F');
+    }
+
+    // Handle padding
+    const headerPadding = params.headerPadding || 0;
+    const headerImageX = headerPadding;
+    const headerImageY = headerSection.y + headerPadding;
+    const headerImageWidth = headerSection.width - (2 * headerPadding);
+    const headerImageHeight = headerSection.height - (2 * headerPadding);
 
     const headerImageUrl = params.headerLogoLeft;
     const headerImageAdded = await addImageToPdf(
         doc,
         headerImageUrl,
-        0, // Position X = 0 (bord gauche)
-        0, // Position Y = 0 (bord haut)
-        210, // largeur pleine (210mm)
-        22, // hauteur 22mm
+        headerImageX,
+        headerImageY,
+        headerImageWidth,
+        headerImageHeight,
         params.companyName
     );
 
@@ -83,21 +104,21 @@ async function renderSection1_Header(doc, params) {
         doc.setFontSize(16);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(31, 41, 55);
-        doc.text(params.companyName, 10, 12);
+        doc.text(params.companyName, 10, headerSection.y + 12);
 
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(19, 62, 94);
         const arkanceWidth = doc.getTextWidth(params.brandName);
-        doc.text(params.brandName, 210 - 10 - arkanceWidth, 12);
+        doc.text(params.brandName, headerSection.width - 10 - arkanceWidth, headerSection.y + 12);
     }
 }
 
-// === SECTION 2: TITRE/SOUS-TITRE (210×28mm) ===
-function renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor) {
+// === SECTION 2: TITRE/SOUS-TITRE ===
+function renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor, positions) {
+    const titleSection = positions.title || { y: 22, height: 28, width: 210 };
 
-    const sectionStartY = 22; // Début section 2
-    const pageWidth = 210;
+    const pageWidth = titleSection.width;
 
     // Titre principal centré - ROBOTO simulé, taille 22
     const titre = (pdc.logiciel?.nom || pdc.logiciel || 'Formation');
@@ -105,7 +126,7 @@ function renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor) {
     doc.setFont('helvetica', 'bold'); // ROBOTO simulé avec helvetica-bold
     doc.setTextColor(...primaryColor);
     const titreWidth = doc.getTextWidth(titre);
-    doc.text(titre, (pageWidth - titreWidth) / 2, sectionStartY + 12);
+    doc.text(titre, (pageWidth - titreWidth) / 2, titleSection.y + 12);
 
     // Sous-titre centré - CALIBRI simulé, taille 18
     const metier = pdc.metier_pdc?.nom || pdc.metier_pdc || 'Métier';
@@ -115,17 +136,18 @@ function renderSection2_Title(doc, pdc, params, primaryColor, lightGrayColor) {
     doc.setFont('helvetica', 'italic'); // CALIBRI simulé avec helvetica-italic
     doc.setTextColor(...lightGrayColor);
     const sousTitreWidth = doc.getTextWidth(sousTitre);
-    doc.text(sousTitre, (pageWidth - sousTitreWidth) / 2, sectionStartY + 22);
+    doc.text(sousTitre, (pageWidth - sousTitreWidth) / 2, titleSection.y + 22);
 }
 
-// === SECTION 3: INFORMATIONS GÉNÉRALES (210×81mm) ===
-function renderSection3_Infos(doc, pdc, params, primaryColor, grayColor) {
+// === SECTION 3: INFORMATIONS GÉNÉRALES ===
+function renderSection3_Infos(doc, pdc, params, primaryColor, grayColor, positions) {
+    const infosSection = positions.infos || { y: 50, height: 81, width: 210 };
 
-    const sectionStartY = 50; // Début section 3
-    const sectionHeight = 81; // Hauteur de la section
+    const sectionStartY = infosSection.y;
+    const sectionHeight = infosSection.height;
     const colKeyX = 10; // Colonne clés à 10mm du bord
     const colValueX = 30; // Colonne valeurs à 30mm du bord
-    const valueWidth = 170; // Largeur disponible pour les valeurs (210-30-10)
+    const valueWidth = infosSection.width - 30 - 10; // Largeur disponible pour les valeurs
 
     // Ajouter le fond gris avec marges de 8mm
     const defaultBgColor = '#f3f4f6'; // Couleur par défaut
@@ -165,8 +187,9 @@ function renderSection3_Infos(doc, pdc, params, primaryColor, grayColor) {
     const spacingAfterBlock = 1; // Espacement de 1mm après chaque ensemble clé+valeur
 
     for (const info of infos) {
-        // Vérifier qu'on ne dépasse pas la section (131mm)
-        if (currentY > 125) {
+        // Vérifier qu'on ne dépasse pas la section
+        const sectionEndY = sectionStartY + sectionHeight - 6;
+        if (currentY > sectionEndY) {
             console.warn('⚠️ Section 3 déborde, ajustement nécessaire');
             break;
         }
@@ -236,16 +259,17 @@ function renderSection3_Infos(doc, pdc, params, primaryColor, grayColor) {
     }
 }
 
-// === SECTION 4: PROGRAMME (210×137mm) ===
-function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor) {
+// === SECTION 4: PROGRAMME ===
+function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, positions) {
+    const programmeSection = positions.programme || { y: 131, height: 137, width: 210 };
 
-    const sectionStartY = 131; // Section 3 finit à ~131mm
-    const sectionEndY = 268; // AUGMENTÉ de 265 à 268 (+8mm total pour se superposer au footer)
-    const sectionHeight = sectionEndY - sectionStartY;
+    const sectionStartY = programmeSection.y;
+    const sectionHeight = programmeSection.height;
+    const sectionEndY = sectionStartY + sectionHeight;
 
-    // Limites de la section - commence juste 2mm après la section 3
+    // Limites de la section - commence juste 2mm après le début
     const lignesStartY = sectionStartY + 2;
-    const lignesEndY = sectionStartY + 137; // AUGMENTÉ de 134 à 137 (+8mm d'espace disponible)
+    const lignesEndY = sectionStartY + sectionHeight;
 
     // Récupérer tous les points
     const allPoints = formatProgrammeForTemplate(pdc);
@@ -671,20 +695,32 @@ function repartirPointsSurColonnes(pointsAvecHauteurs, hauteurMax, paddingFin) {
     return colonnes;
 }
 
-// === SECTION 5: FOOTER (210×37mm) ===
-async function renderSection5_Footer(doc, params) {
+// === SECTION 5: FOOTER ===
+async function renderSection5_Footer(doc, params, positions) {
+    const footerSection = positions.footer || { y: 260, height: 37, width: 210 };
 
-    const pageHeight = 297;
-    const footerStartY = 260; // Début section 5
+    // Add background if configured
+    if (params.footerBackground) {
+        const bgColor = hexToRgb(params.footerBackground) || params.footerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, footerSection.y, footerSection.width, footerSection.height, 'F');
+    }
+
+    // Handle padding
+    const footerPadding = params.footerPadding || 0;
+    const footerImageX = footerPadding;
+    const footerImageY = footerSection.y + footerPadding;
+    const footerImageWidth = footerSection.width - (2 * footerPadding);
+    const footerImageHeight = footerSection.height - (2 * footerPadding);
 
     const footerImageUrl = params.footerLogoLeft;
     const footerImageAdded = await addImageToPdf(
         doc,
         footerImageUrl,
-        0, // Position X = 0 (bord gauche)
-        footerStartY, // Position Y = 260mm
-        210, // largeur pleine (210mm)
-        37 // hauteur 37mm
+        footerImageX,
+        footerImageY,
+        footerImageWidth,
+        footerImageHeight
     );
 
     if (!footerImageAdded) {
@@ -693,7 +729,7 @@ async function renderSection5_Footer(doc, params) {
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(107, 114, 128);
 
-        const footerY = footerStartY + 15;
+        const footerY = footerSection.y + 15;
 
         const footerText = [
             params.footerAddress,
@@ -704,7 +740,7 @@ async function renderSection5_Footer(doc, params) {
         for (const line of footerText) {
             if (line) {
                 const lineWidth = doc.getTextWidth(line);
-                doc.text(line, (210 - lineWidth) / 2, textY);
+                doc.text(line, (footerSection.width - lineWidth) / 2, textY);
                 textY += 4;
             }
         }

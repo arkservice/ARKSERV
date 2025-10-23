@@ -111,6 +111,7 @@
     }
 
     // Helper pour ajouter une image au PDF avec gestion d'erreur améliorée
+    // AMÉLIORATION : Contraint l'image aux dimensions données tout en respectant le ratio
     async function addImageToPdf(doc, imageUrl, x, y, width, height, fallbackText = null) {
         if (!imageUrl) {
             if (fallbackText) {
@@ -146,9 +147,39 @@
             else if (imageData.includes('data:image/svg')) format = 'SVG';
             else if (imageData.includes('data:image/webp')) format = 'WEBP';
 
-            // Tentative d'ajout de l'image
+            // Tentative d'ajout de l'image avec contrainte stricte de dimensions
             try {
-                doc.addImage(imageData, format, x, y, width, height);
+                // IMPORTANT : Créer un objet Image pour obtenir les dimensions naturelles
+                const img = new Image();
+                img.src = imageData;
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+
+                // Calculer le ratio pour contraindre l'image dans la zone donnée
+                const imgRatio = img.naturalWidth / img.naturalHeight;
+                const targetRatio = width / height;
+
+                let finalWidth = width;
+                let finalHeight = height;
+                let offsetX = 0;
+                let offsetY = 0;
+
+                // Ajuster les dimensions pour respecter le ratio tout en restant dans la zone
+                if (imgRatio > targetRatio) {
+                    // Image plus large : contraindre par la largeur
+                    finalHeight = width / imgRatio;
+                    offsetY = (height - finalHeight) / 2;
+                } else {
+                    // Image plus haute : contraindre par la hauteur
+                    finalWidth = height * imgRatio;
+                    offsetX = (width - finalWidth) / 2;
+                }
+
+                // Ajouter l'image avec les dimensions calculées
+                doc.addImage(imageData, format, x + offsetX, y + offsetY, finalWidth, finalHeight);
                 return true;
             } catch (addImageError) {
                 console.error('❌ Erreur jsPDF addImage:', addImageError);

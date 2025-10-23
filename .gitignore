@@ -17,6 +17,9 @@ logs/
 .env
 .env.local
 
+# Secrets
+.secrets_*.txt
+
 # Claude Code
 .claude/
 
@@ -28,3 +31,15 @@ dist/
 build/
 tmp/
 temp/
+deploy/
+
+# Node modules (if added later)
+node_modules/
+
+# Migration archives
+migrations/archive/
+
+# Editor backup files
+*~
+*.bak
+*.orig

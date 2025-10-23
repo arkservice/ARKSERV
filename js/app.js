@@ -29,6 +29,7 @@ function initializeApp() {
         'useTemplates',
         'useFormation',
         'useEvaluation',
+        'useAgences',
         'generatePDFWithJsPDF',
         'TableView',
         'SimpleCalendar',
@@ -62,6 +63,7 @@ function initializeApp() {
         'FormationPrepPage',
         'EvaluationFormPage',
         'EvaluationListPage',
+        'AgencesPage',
         'Layout'
     ];
     

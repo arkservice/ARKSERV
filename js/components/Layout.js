@@ -213,6 +213,8 @@ function Layout() {
                 return React.createElement(window.ServicesPage, {
                     // Pas de onRowClick : utilise le comportement par défaut (ouvre le modal d'édition)
                 });
+            case 'agences':
+                return React.createElement(window.AgencesPage);
             case 'metier-pdc':
                 return React.createElement(window.MetierPdcPage, {
                     // Pas de onRowClick : utilise le comportement par défaut (ouvre le modal d'édition)

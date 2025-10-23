@@ -34,235 +34,17 @@ function useDocumentGenerationService() {
         }
     }, [supabase]);
     
-    // Fonctions utilitaires copiées depuis TemplateBuilderPage.js
+    // Utilisation des fonctions centralisées du DocumentDataService
+    // Les fonctions de données par défaut sont maintenant dans documentDataService.js
     
-    // Générer des données par défaut pour convocation
-    const getDefaultConvocationData = () => {
-        return {
-            destinataire: 'Monsieur/Madame',
-            objet: 'Convocation pour une formation',
-            date: new Date().toLocaleDateString('fr-FR'),
-            formation: 'Formation',
-            concept: 'Formation professionnelle',
-            lieu: 'À définir',
-            dates: 'Dates à définir',
-            heures: '09h00 à 17h00',
-            stagiaires: 'Stagiaires à définir',
-            signataire: 'Responsable formation',
-            titre_signataire: 'Service Formation'
-        };
-    };
-    
-    // Générer des données par défaut pour convention
-    const getDefaultConventionData = () => {
-        return {
-            numero: new Date().getFullYear() + '01 - PR-0000',
-            societe: 'Société cliente',
-            adresse: 'Adresse de la société',
-            representant: 'Représentant légal',
-            duree: '1 jour',
-            formateur: 'Formateur ARKANCE',
-            programme: 'Programme de formation',
-            moyens: 'Moyens pédagogiques',
-            formation: 'Formation professionnelle',
-            cout: '0,00',
-            tva: '0,00',
-            total: '0,00'
-        };
-    };
-    
-    // Convertir les données projet en données convocation
+    // Utiliser le service centralisé pour convertir les données
     const getConvocationDataFromProject = async (project) => {
-        if (!project) return getDefaultConvocationData();
-        
-        const entreprise = project.entreprise || {};
-        const commercial = project.commercial || {};
-        const contact = project.contact || {};
-        const logiciel = project.logiciel || {};
-        
-        // Récupérer les sessions détaillées du projet
-        let sessions = [];
-        try {
-            sessions = await getSessionsForProject(project.id);
-        } catch (error) {
-            console.warn('Erreur récupération sessions pour convocation:', error);
-        }
-        
-        // Formater les sessions pour l'affichage
-        const formatSession = (session, index) => {
-            const dateDebut = session.dateDebut;
-            const dateFin = session.dateFin;
-            const lieu = session.lieu || 'Formation à distance';
-            
-            // Format date : si même jour = "le DD/MM/YYYY", sinon "du DD/MM/YYYY au DD/MM/YYYY"
-            let dateText;
-            if (dateDebut.toDateString() === dateFin.toDateString()) {
-                dateText = `le ${dateDebut.toLocaleDateString('fr-FR')}`;
-            } else {
-                dateText = `du ${dateDebut.toLocaleDateString('fr-FR')} au ${dateFin.toLocaleDateString('fr-FR')}`;
-            }
-            
-            return `Session ${index + 1} : ${dateText} à ${lieu}`;
-        };
-        
-        const sessionsFormattees = sessions.length > 0 ? 
-            sessions.map(formatSession) : 
-            [`Session 1 : ${project.periode_souhaitee || 'Dates à définir'} à ${project.lieu_projet || 'Formation à distance'}`];
-        
-        // Récupérer les noms des stagiaires depuis les sessions
-        const stagiairesList = sessions.length > 0 ? 
-            [...new Set(sessions.flatMap(s => s.stagiaires))].join(', ') :
-            `${project.nombre_stagiaire || 1} participant(s) pour ${project.name || 'la formation'}`;
-        
-        return {
-            destinataire: contact.prenom && contact.nom ? 
-                `${contact.prenom.charAt(0).toUpperCase() + contact.prenom.slice(1)} ${contact.nom.toUpperCase()}` : 
-                'Monsieur/Madame',
-            objet: 'Convocation pour une formation',
-            date: new Date().toLocaleDateString('fr-FR'),
-            formation: project.name || 'Formation',
-            concept: logiciel.nom ? `Formation ${logiciel.nom}` : 'Formation spécialisée',
-            // Sessions détaillées au lieu de champs agrégés
-            sessions: sessionsFormattees,
-            // Garder les anciens champs comme fallback
-            lieu: project.lieu_projet || 'Formation à distance',
-            dates: project.periode_souhaitee || 'Dates à définir',
-            heures: '09h00 à 12h00 et de 13h00 à 17h00',
-            stagiaires: stagiairesList,
-            signataire: commercial.prenom && commercial.nom ? 
-                `${commercial.prenom} ${commercial.nom}` : 
-                'Geoffrey La MENDOLA',
-            titre_signataire: 'Ingénieur Commercial',
-            // Informations entreprise cliente pour l'adresse en haut à droite
-            entreprise_nom: entreprise.nom || 'Entreprise',
-            entreprise_adresse: entreprise.adresse || 'Adresse non renseignée'
-        };
+        return await window.DocumentDataService.getConvocationDataFromProject(project, supabase);
     };
     
-    // Convertir les données projet en données convention (ASYNC pour récupérer les sessions)
+    // Utiliser le service centralisé pour convertir les données
     const getConventionDataFromProject = async (project, projectSessions = null) => {
-        if (!project) return getDefaultConventionData();
-        
-        // LOGS DE DÉBOGAGE - DÉBUT
-        console.log('🔍 [DEBUG] getConventionDataFromProject - Données projet complètes:', project);
-        
-        const entreprise = project.entreprise || {};
-        const commercial = project.commercial || {};
-        const contact = project.contact || {};
-        const logiciel = project.logiciel || {};
-        const pdc = project.pdc || {};
-        
-        console.log('🔍 [DEBUG] Données PDC extraites:', pdc);
-        console.log('🔍 [DEBUG] PDC duree_en_jour:', pdc.duree_en_jour);
-        console.log('🔍 [DEBUG] Project.pdc_id:', project.pdc_id);
-        
-        // Utiliser les sessions préchargées ou les récupérer si nécessaire
-        let sessions = projectSessions || [];
-        let formateurInfo = null;
-        let lieuFormation = 'Lieu à définir';
-        
-        try {
-            if (!projectSessions || projectSessions.length === 0) {
-                console.log('🔍 [DEBUG] Récupération des sessions car pas de sessions préchargées');
-                sessions = await getSessionsForProject(project.id);
-            } else {
-                console.log('✅ [DEBUG] Utilisation des sessions préchargées:', projectSessions.length, 'sessions');
-            }
-            console.log('🔍 [DEBUG] Sessions utilisées:', sessions);
-            
-            // Récupérer le formateur de la première session
-            if (sessions.length > 0) {
-                const premiereSession = sessions[0];
-                console.log('🔍 [DEBUG] Première session:', premiereSession);
-                console.log('🔍 [DEBUG] Formateur dans première session:', premiereSession.formateur);
-                
-                if (premiereSession.formateur) {
-                    // Le formateur est déjà formaté dans useProjectSessions avec la structure { id, nom }
-                    formateurInfo = premiereSession.formateur.nom || 'Formateur non défini';
-                    console.log('🔍 [DEBUG] Formateur formaté:', formateurInfo);
-                }
-                
-                // FORMATAGE DU LIEU - LOGS DÉTAILLÉS
-                console.log('🔍 [DEBUG] === DÉBUT FORMATAGE LIEU ===');
-                console.log('🔍 [DEBUG] Nombre de sessions:', sessions.length);
-                console.log('🔍 [DEBUG] Sessions avec leurs lieux:', sessions.map(s => ({ 
-                    titre: s.titre, 
-                    lieu: s.lieu,
-                    index: sessions.indexOf(s)
-                })));
-                
-                // Formater comme "Session 1: lieu1, Session 2: lieu2"
-                const sessionsAvecLieux = sessions
-                    .map((session, index) => {
-                        const lieu = session.lieu || 'à distance';
-                        const sessionFormatee = `Session ${index + 1}: ${lieu}`;
-                        console.log(`🔍 [DEBUG] Session ${index + 1} formatée:`, sessionFormatee);
-                        return sessionFormatee;
-                    })
-                    .filter(sessionText => sessionText !== ''); // Supprimer les sessions vides
-                
-                console.log('🔍 [DEBUG] Sessions formatées:', sessionsAvecLieux);
-                
-                if (sessionsAvecLieux.length > 0) {
-                    lieuFormation = sessionsAvecLieux.join(', ');
-                    console.log('✅ [DEBUG] lieuFormation FINAL formaté par sessions:', lieuFormation);
-                } else {
-                    // Fallback vers la logique simple si pas de sessions
-                    const lieuxUniques = [...new Set(sessions.map(s => s.lieu).filter(lieu => lieu))];
-                    if (lieuxUniques.length > 0) {
-                        lieuFormation = lieuxUniques.join(' et ');
-                    }
-                    console.warn('⚠️ [DEBUG] FALLBACK - lieuFormation:', lieuFormation);
-                }
-                console.log('🔍 [DEBUG] === FIN FORMATAGE LIEU ===');
-            } else {
-                console.warn('⚠️ [DEBUG] Aucune session trouvée pour ce projet');
-                // Améliorer le fallback pour éviter "à l'adresse à définir"
-                lieuFormation = 'formation à distance ou en présentiel selon modalités';
-            }
-        } catch (error) {
-            console.error('🔍 [DEBUG] Erreur récupération sessions pour convention:', error);
-        }
-        
-        // Générer un numéro de convention basé sur l'année et l'ID du projet
-        const year = new Date().getFullYear();
-        const projectShortId = project.id ? project.id.slice(-8) : '12345678';
-        
-        // Calculer la durée depuis le PDC
-        const dureeJours = pdc.duree_en_jour || 5;
-        const dureeText = dureeJours === 1 ? '1 jour' : `${dureeJours} jour(s)`;
-        console.log('🔍 [DEBUG] Durée calculée:', dureeText, 'depuis pdc.duree_en_jour:', pdc.duree_en_jour);
-        
-        const conventionData = {
-            numero: `${year}01 - PR-${projectShortId}`,
-            societe: entreprise.nom || 'Société',
-            adresse: entreprise.adresse || 'Adresse non renseignée',
-            representant: contact.prenom && contact.nom ? 
-                `${contact.prenom.charAt(0).toUpperCase() + contact.prenom.slice(1)} ${contact.nom.toUpperCase()}` : 
-                'Monsieur le Directeur',
-            duree: dureeText, // CORRECTION Article 2: Durée dynamique depuis PDC
-            formateur: formateurInfo || 'Formateur ARKANCE', // CORRECTION Article 3: Formateur des sessions
-            programme: project.name || 'Formation spécialisée',
-            moyens: 'Formation en présentiel avec supports pédagogiques et exercices pratiques',
-            formation: logiciel.nom ? `Formation ${logiciel.nom}` : project.name || 'Formation',
-            cout: '6750,00', // Valeurs par défaut - à terme, récupérer du devis
-            tva: '1350,00',
-            total: '8100,00',
-            
-            // Nouvelles données pour les 7 articles détaillés
-            stagiaires: `${project.nombre_stagiaire || 1} participant(s)`,
-            dates: project.periode_souhaitee || 'Dates à définir selon planning',
-            lieu_type: project.lieu_projet?.toLowerCase().includes('distance') ? 'distance' : 'sur_site',
-            lieu_formation: lieuFormation, // CORRECTION Article 4: Adresse exacte des sessions
-            editeur: 'Autodesk', // Valeur par défaut - éditeur principal
-            logiciel: logiciel.nom || project.name || 'Logiciel',
-            type_pdc: pdc.nom || project.type_formation || 'Concepts de base'
-        };
-        
-        console.log('🔍 [DEBUG] Données de convention finales:', conventionData);
-        // LOGS DE DÉBOGAGE - FIN
-        
-        return conventionData;
+        return await window.DocumentDataService.getConventionDataFromProject(project, projectSessions, supabase);
     };
     
     // Convertir le template en paramètres pour le générateur PDF
@@ -333,8 +115,13 @@ function useDocumentGenerationService() {
                     entreprise(*),
                     commercial:user_profile!commercial_id(*),
                     contact:user_profile!contact_id(*),
-                    logiciel(*),
-                    pdc(*)
+                    formateur:formateur_id(
+                        id,
+                        nom,
+                        prenom,
+                        email
+                    ),
+                    pdc(*, logiciel:logiciel_id(nom, logo))
                 `)
                 .eq('id', projectId)
                 .single();
@@ -395,11 +182,12 @@ function useDocumentGenerationService() {
             if (uploadError) {
                 throw new Error(`Erreur upload convocation: ${uploadError.message}`);
             }
-            
-            // Obtenir l'URL publique
+
+            // Obtenir l'URL publique avec cache-busting timestamp
             const { data } = supabase.storage.from('pdfs').getPublicUrl(filePath);
-            const publicUrl = data.publicUrl;
-            
+            const timestamp = new Date().getTime();
+            const publicUrl = `${data.publicUrl}?v=${timestamp}`;
+
             // Mettre à jour le projet avec l'URL de la convocation
             const { error: updateError } = await supabase
                 .from('projects')
@@ -483,11 +271,12 @@ function useDocumentGenerationService() {
             if (uploadError) {
                 throw new Error(`Erreur upload convention: ${uploadError.message}`);
             }
-            
-            // Obtenir l'URL publique
+
+            // Obtenir l'URL publique avec cache-busting timestamp
             const { data } = supabase.storage.from('pdfs').getPublicUrl(filePath);
-            const publicUrl = data.publicUrl;
-            
+            const timestamp = new Date().getTime();
+            const publicUrl = `${data.publicUrl}?v=${timestamp}`;
+
             // Mettre à jour le projet avec l'URL de la convention
             const { error: updateError } = await supabase
                 .from('projects')
@@ -585,194 +374,6 @@ function useDocumentGenerationService() {
         fetchDocumentUrls
     };
 }
-
-// FONCTION DE TEST TEMPORAIRE pour tracer et valider la correction du lieu
-window.testLieuFormationCorrection = async (projectId) => {
-    console.log('🧪 [TEST CORRECTION] Test complet de la correction du lieu pour projet:', projectId);
-    
-    try {
-        // Test du service documentGeneration (comme dans la vraie génération)
-        const supabase = window.supabaseConfig.client;
-        const { data: project } = await supabase
-            .from('projects')
-            .select(`*,entreprise(*),commercial:user_profile!commercial_id(*),contact:user_profile!contact_id(*),logiciel(*),pdc(*)`)
-            .eq('id', projectId)
-            .single();
-            
-        console.log('🧪 [TEST CORRECTION] 1. Projet récupéré');
-        
-        // Précharger les sessions comme dans generateConvention()
-        const { getSessionsForProject } = window.useProjectSessions();
-        const projectSessions = await getSessionsForProject(project.id);
-        console.log('🧪 [TEST CORRECTION] 2. Sessions préchargées:', projectSessions.length);
-        
-        // Tester getConventionDataFromProject avec sessions préchargées
-        const conventionData = await getConventionDataFromProject(project, projectSessions);
-        console.log('🧪 [TEST CORRECTION] 3. Convention data avec lieu_formation:', conventionData.lieu_formation);
-        
-        // Simuler la génération PDF
-        if (window.generateConventionPDF) {
-            const { loadTemplateByType } = window.useTemplates();
-            const template = await loadTemplateByType('convention');
-            const templateParams = getSpecificParams('convention', template);
-            
-            console.log('🧪 [TEST CORRECTION] 4. Génération du PDF...');
-            const pdfBlob = await window.generateConventionPDF(conventionData, templateParams);
-            
-            // Télécharger pour vérification
-            const url = URL.createObjectURL(pdfBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `test_correction_lieu_${new Date().getTime()}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            console.log('✅ [TEST CORRECTION] PDF généré et téléchargé - Vérifiez l\'Article IV !');
-        }
-        
-        return conventionData;
-        
-    } catch (error) {
-        console.error('❌ [TEST CORRECTION] Erreur:', error);
-    }
-};
-
-// FONCTION DE TEST TEMPORAIRE pour tracer le problème du lieu
-window.testLieuFormation = async (projectId) => {
-    console.log('🧪 [TEST LIEU] Test du lieu de formation pour projet:', projectId);
-    
-    try {
-        // Étape 1: Vérifier les sessions
-        const { getSessionsForProject } = window.useProjectSessions();
-        const sessions = await getSessionsForProject(projectId);
-        console.log('🧪 [TEST LIEU] Sessions récupérées:', sessions);
-        console.log('🧪 [TEST LIEU] Lieux des sessions:', sessions.map(s => s.lieu));
-        
-        // Étape 2: Récupérer les données du projet
-        const supabase = window.supabaseConfig.client;
-        const { data: project } = await supabase
-            .from('projects')
-            .select(`*,entreprise(*),commercial:user_profile!commercial_id(*),contact:user_profile!contact_id(*),logiciel(*),pdc(*)`)
-            .eq('id', projectId)
-            .single();
-            
-        console.log('🧪 [TEST LIEU] Projet récupéré:', project);
-        
-        // Étape 3: Tester getConventionDataFromProject
-        const conventionData = await getConventionDataFromProject(project);
-        console.log('🧪 [TEST LIEU] Convention data généré:', conventionData);
-        console.log('🧪 [TEST LIEU] lieu_formation dans conventionData:', conventionData.lieu_formation);
-        
-        return conventionData;
-        
-    } catch (error) {
-        console.error('❌ [TEST LIEU] Erreur:', error);
-    }
-};
-
-// FONCTION DE TEST TEMPORAIRE pour vérifier le rendu des articles en gras
-window.testConventionPDFRendering = async (projectId) => {
-    console.log('🧪 [TEST PDF] Test du rendu PDF avec texte en gras pour projet:', projectId);
-    
-    try {
-        // Récupérer les données du projet
-        const supabase = window.supabaseConfig.client;
-        const { data: project, error } = await supabase
-            .from('projects')
-            .select(`
-                *,
-                entreprise(*),
-                commercial:user_profile!commercial_id(*),
-                contact:user_profile!contact_id(*),
-                logiciel(*),
-                pdc(*)
-            `)
-            .eq('id', projectId)
-            .single();
-            
-        if (error) {
-            console.error('❌ [TEST PDF] Erreur récupération projet:', error);
-            return;
-        }
-        
-        // Générer les données de convention
-        const conventionData = await getConventionDataFromProject(project);
-        console.log('📋 [TEST PDF] Données convention:', conventionData);
-        
-        // Charger le template
-        const { loadTemplateByType } = window.useTemplates();
-        const template = await loadTemplateByType('convention');
-        const templateParams = getSpecificParams('convention', template);
-        
-        // Générer le PDF
-        if (window.generateConventionPDF) {
-            const pdfBlob = await window.generateConventionPDF(conventionData, templateParams);
-            
-            // Créer un lien de téléchargement pour tester
-            const url = URL.createObjectURL(pdfBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `test_convention_gras_${new Date().getTime()}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            
-            console.log('✅ [TEST PDF] PDF généré avec succès et téléchargé');
-        } else {
-            console.error('❌ [TEST PDF] Générateur de convention non disponible');
-        }
-        
-    } catch (error) {
-        console.error('❌ [TEST PDF] Erreur dans testConventionPDFRendering:', error);
-    }
-};
-
-// FONCTION DE TEST TEMPORAIRE
-window.testConventionData = async (projectId) => {
-    console.log('🧪 [TEST] Test des données de convention pour projet:', projectId);
-    
-    try {
-        // Invalider le cache des projets et forcer le rechargement
-        if (window.useProjects) {
-            const { invalidateCache } = window.useProjects();
-            await invalidateCache();
-        }
-        
-        // Récupérer les données fraîches du projet 
-        const supabase = window.supabaseConfig.client;
-        const { data: project, error } = await supabase
-            .from('projects')
-            .select(`
-                *,
-                entreprise(*),
-                commercial:user_profile!commercial_id(*),
-                contact:user_profile!contact_id(*),
-                logiciel(*),
-                pdc(*)
-            `)
-            .eq('id', projectId)
-            .single();
-            
-        if (error) {
-            console.error('❌ [TEST] Erreur récupération projet:', error);
-            return;
-        }
-        
-        console.log('📊 [TEST] Données projet récupérées:', project);
-        
-        // Tester la récupération des données de convention
-        const conventionData = await getConventionDataFromProject(project);
-        console.log('📋 [TEST] Données convention générées:', conventionData);
-        
-        return conventionData;
-        
-    } catch (error) {
-        console.error('❌ [TEST] Erreur dans testConventionData:', error);
-    }
-};
 
 // Export global
 window.useDocumentGenerationService = useDocumentGenerationService;

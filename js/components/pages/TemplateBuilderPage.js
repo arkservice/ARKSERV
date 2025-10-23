@@ -12,8 +12,17 @@ function TemplateBuilderPage() {
     const [selectedDocumentType, setSelectedDocumentType] = useState('pdc');
     const [selectedPdc, setSelectedPdc] = useState(null);
     const [selectedProject, setSelectedProject] = useState(null);
+    const [selectedFormation, setSelectedFormation] = useState(null);
     const [selectedEvaluation, setSelectedEvaluation] = useState(null);
     const [projectSessions, setProjectSessions] = useState([]);
+    const [imageModalOpen, setImageModalOpen] = useState(null); // null ou 'header_image'/'footer_image'
+
+    // États pour le layout editor
+    const [sections, setSections] = useState([]);
+    const [selectedSectionId, setSelectedSectionId] = useState(null);
+    const [viewMode, setViewMode] = useState('visual'); // 'visual' ou 'pdf'
+    const [imagesExpanded, setImagesExpanded] = useState(true); // Pour toggle section images
+    const iframeRef = React.useRef(null);
     
     // Fonction pour afficher une notification
     const showNotification = (message, type = 'info') => {
@@ -27,37 +36,45 @@ function TemplateBuilderPage() {
         { id: 'convocation', label: 'Convocation', icon: 'users', description: 'Templates pour les convocations de formation' },
         { id: 'convention', label: 'Convention', icon: 'file-signature', description: 'Templates pour les conventions de formation professionnelle' },
         { id: 'emargement', label: 'Émargement', icon: 'clipboard-check', description: 'Templates pour les feuilles d\'émargement par stagiaire' },
-        { id: 'qualiopi', label: 'Évaluation Qualiopi', icon: 'award', description: 'Templates pour les évaluations Qualiopi (EVALUATION DES ACQUIS)' }
+        { id: 'qualiopi', label: 'Évaluation Qualiopi', icon: 'award', description: 'Templates pour les évaluations Qualiopi (EVALUATION DES ACQUIS)' },
+        { id: 'attestation', label: 'Attestation', icon: 'award', description: 'Templates pour les attestations de formation' }
     ];
     
     // Hooks pour les données
     const { pdcs, loading: pdcsLoading } = window.usePdc();
     const { projects, loading: projectsLoading } = window.useProjects();
+    const { sessions: formations, loading: formationsLoading, fetchSessions, getSessionById } = window.useFormation();
     const { evaluations, loading: evaluationsLoading } = window.useEvaluation();
     const { getSessionsForProject } = window.useProjectSessions();
-    const { 
-        loadTemplateByType, 
-        saveTemplateByType, 
-        uploadImage, 
+    const {
+        loadTemplateByType,
+        saveTemplateByType,
+        uploadImage,
         deleteImage,
         getImageFromLocal,
         loading: templateLoading,
-        error: templateError
+        error: templateError,
+        loadSectionsByType,
+        saveSectionsByType
     } = window.useTemplates();
     
     // Chargement initial
     useEffect(() => {
         loadCurrentTemplate();
+        loadCurrentSections();
         if (pdcs && pdcs.length > 0 && !selectedPdc) {
             setSelectedPdc(pdcs[0]);
         }
         if (projects && projects.length > 0 && !selectedProject) {
             setSelectedProject(projects[0]);
         }
+        if (formations && formations.length > 0 && !selectedFormation) {
+            setSelectedFormation(formations[0]);
+        }
         if (evaluations && evaluations.length > 0 && !selectedEvaluation) {
             setSelectedEvaluation(evaluations[0]);
         }
-    }, [pdcs, projects, evaluations, selectedDocumentType]);
+    }, [pdcs, projects, formations, evaluations, selectedDocumentType]);
     
     // Charger les sessions du projet sélectionné
     useEffect(() => {
@@ -77,7 +94,39 @@ function TemplateBuilderPage() {
         
         loadProjectSessions();
     }, [selectedProject?.id]);
-    
+
+    // Écouter les mises à jour de formation depuis d'autres pages
+    useEffect(() => {
+        if (!window.EventBus || !window.EventBusEvents) return;
+
+        const handleFormationUpdated = async (data) => {
+            console.log('📡 [TemplateBuilderPage] Formation mise à jour reçue:', data);
+
+            // Rafraîchir la liste des formations
+            await fetchSessions();
+
+            // Si la formation modifiée est celle actuellement sélectionnée, la rafraîchir
+            if (selectedFormation?.id === data.formationId) {
+                try {
+                    const freshFormation = await getSessionById(data.formationId);
+                    setSelectedFormation(freshFormation);
+                    console.log('✅ [TemplateBuilderPage] Formation sélectionnée rafraîchie');
+                } catch (error) {
+                    console.error('❌ [TemplateBuilderPage] Erreur refresh formation:', error);
+                }
+            }
+        };
+
+        // S'abonner à l'événement
+        const unsubscribe = window.EventBus.on(
+            window.EventBusEvents.FORMATION_UPDATED,
+            handleFormationUpdated
+        );
+
+        // Cleanup lors du démontage du composant
+        return unsubscribe;
+    }, [selectedFormation?.id]);
+
     // Charger le template actuel
     const loadCurrentTemplate = async () => {
         try {
@@ -106,7 +155,22 @@ function TemplateBuilderPage() {
             showNotification('Erreur lors du chargement du template', 'error');
         }
     };
-    
+
+    // Charger les sections du type de document actuel
+    const loadCurrentSections = async () => {
+        try {
+            const loadedSections = await loadSectionsByType(selectedDocumentType);
+            setSections(loadedSections);
+            // Sélectionner la première section par défaut
+            if (loadedSections && loadedSections.length > 0) {
+                setSelectedSectionId(loadedSections[0].id);
+            }
+        } catch (error) {
+            console.error('Erreur chargement sections:', error);
+            setSections([]);
+        }
+    };
+
     // Auto-sauvegarde du template
     const autoSaveTemplate = async () => {
         if (isSaving || !currentTemplate) return;
@@ -126,14 +190,14 @@ function TemplateBuilderPage() {
         setCurrentTemplate(prev => ({ ...prev, name }));
     };
     
-    // Gestion de l'upload d'images
+    // Gestion de l'upload d'images (partagées entre templates)
     const handleImageUpload = async (file, imageType) => {
         if (!file) return;
-        
+
         setUploadingImages(prev => ({ ...prev, [imageType]: true }));
-        
+
         try {
-            const url = await uploadImage(file, imageType, selectedDocumentType);
+            const url = await uploadImage(file, imageType);
             setCurrentTemplate(prev => ({ ...prev, [imageType]: url }));
             showNotification('Image téléchargée avec succès', 'success');
         } catch (error) {
@@ -143,13 +207,13 @@ function TemplateBuilderPage() {
             setUploadingImages(prev => ({ ...prev, [imageType]: false }));
         }
     };
-    
-    // Suppression d'une image
+
+    // Suppression d'une image (partagée)
     const handleImageDelete = async (imageType) => {
         if (!currentTemplate[imageType]) return;
-        
+
         try {
-            await deleteImage(currentTemplate[imageType]);
+            await deleteImage(currentTemplate[imageType], imageType);
             setCurrentTemplate(prev => ({ ...prev, [imageType]: null }));
             showNotification('Image supprimée', 'success');
         } catch (error) {
@@ -161,38 +225,56 @@ function TemplateBuilderPage() {
     // Génération de la prévisualisation PDF
     const generatePreview = async () => {
         if (!currentTemplate) return;
-        
+
         setIsGenerating(true);
         try {
-            const pdfParams = convertTemplateToParams(currentTemplate);
-            
+            // Auto-refresh: Rafraîchir la formation sélectionnée avant génération
+            let formationToUse = selectedFormation;
+            if ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention') && selectedFormation?.id) {
+                try {
+                    console.log('🔄 [generatePreview] Rafraîchissement de la formation avant génération');
+                    formationToUse = await getSessionById(selectedFormation.id);
+                    console.log('✅ [generatePreview] Formation rafraîchie:', formationToUse);
+                } catch (error) {
+                    console.error('❌ [generatePreview] Erreur refresh formation:', error);
+                    // Continuer avec les données existantes en cas d'erreur
+                }
+            }
+
+            const pdfParams = convertTemplateToParams(currentTemplate, sections);
+
             let pdfBlob;
-            
+
             switch (selectedDocumentType) {
                 case 'pdc':
                     if (!selectedPdc || !window.generatePDFWithJsPDF) return;
                     pdfBlob = await window.generatePDFWithJsPDF(selectedPdc, pdfParams);
                     break;
-                    
+
                 case 'convocation':
                     if (!window.generateConvocationPDF) {
                         showNotification('Générateur de convocation non disponible', 'error');
                         return;
                     }
-                    const convocationData = await getConvocationDataFromProject(selectedProject, getSessionsForProject);
+                    // Les formations sont des projets avec type='formation'
+                    const convocationData = await getConvocationDataFromProject(formationToUse);
                     pdfBlob = await window.generateConvocationPDF(convocationData, pdfParams);
                     break;
-                    
+
                 case 'convention':
                     if (!window.generateConventionPDF) {
                         showNotification('Générateur de convention non disponible', 'error');
                         return;
                     }
-                    const conventionData = await getConventionDataFromProject(selectedProject, projectSessions);
-                    const conventionParams = getSpecificParams('convention', currentTemplate);
+                    // Les formations sont des projets avec type='formation'
+                    console.log('🔍 [TemplateBuilderPage] formationToUse:', formationToUse);
+                    console.log('🔍 [TemplateBuilderPage] formationToUse.formateur:', formationToUse?.formateur);
+                    const conventionData = await getConventionDataFromProject(formationToUse);
+                    console.log('🔍 [TemplateBuilderPage] conventionData.formateur:', conventionData?.formateur);
+                    const conventionParams = getSpecificParams('convention', currentTemplate, sections);
                     pdfBlob = await window.generateConventionPDF(conventionData, conventionParams);
                     break;
-                    
+
                 case 'emargement':
                     if (!window.generateEmargementPDF) {
                         showNotification('Générateur d\'émargement non disponible', 'error');
@@ -210,6 +292,16 @@ function TemplateBuilderPage() {
                     // Utiliser l'évaluation sélectionnée ou les données par défaut
                     const qualiopiData = selectedEvaluation || getDefaultQualiopiData();
                     pdfBlob = await window.generateQualiopiPDF(qualiopiData, pdfParams);
+                    break;
+
+                case 'attestation':
+                    if (!window.generateDiplomePDF) {
+                        showNotification('Générateur d\'attestation non disponible', 'error');
+                        return;
+                    }
+                    // Utiliser l'évaluation sélectionnée
+                    const diplomeData = await getDiplomeDataFromEvaluation(selectedEvaluation);
+                    pdfBlob = await window.generateDiplomePDF(diplomeData, pdfParams);
                     break;
 
                 default:
@@ -231,7 +323,130 @@ function TemplateBuilderPage() {
             setIsGenerating(false);
         }
     };
-    
+
+    // Génération en mode "Prod Test" - Simule le flux de production sans upload
+    const generateProdTest = async () => {
+        if (!currentTemplate) return;
+
+        setIsGenerating(true);
+        try {
+            console.log('🚀 [PROD TEST] Début de la génération en mode production');
+
+            // Auto-refresh: Rafraîchir la formation sélectionnée avant génération
+            let formationToUse = selectedFormation;
+            if ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention') && selectedFormation?.id) {
+                try {
+                    console.log('🔄 [generateProdTest] Rafraîchissement de la formation avant génération');
+                    formationToUse = await getSessionById(selectedFormation.id);
+                    console.log('✅ [generateProdTest] Formation rafraîchie:', formationToUse);
+                } catch (error) {
+                    console.error('❌ [generateProdTest] Erreur refresh formation:', error);
+                    // Continuer avec les données existantes en cas d'erreur
+                }
+            }
+
+            const pdfParams = convertTemplateToParams(currentTemplate, sections);
+            let pdfBlob;
+
+            switch (selectedDocumentType) {
+                case 'pdc':
+                    if (!selectedPdc || !window.generatePDFWithJsPDF) return;
+                    pdfBlob = await window.generatePDFWithJsPDF(selectedPdc, pdfParams);
+                    break;
+
+                case 'convocation':
+                    if (!window.generateConvocationPDF) {
+                        showNotification('Générateur de convocation non disponible', 'error');
+                        return;
+                    }
+                    // IMPORTANT: Précharger les sessions comme en production
+                    let convocationSessions = [];
+                    if (formationToUse?.id) {
+                        convocationSessions = await getSessionsForProject(formationToUse.id);
+                        console.log('🔍 [PROD TEST CONVOCATION] Sessions préchargées:', convocationSessions);
+                    }
+                    const convocationData = await getConvocationDataFromProject(formationToUse, convocationSessions);
+                    pdfBlob = await window.generateConvocationPDF(convocationData, pdfParams);
+                    break;
+
+                case 'convention':
+                    if (!window.generateConventionPDF) {
+                        showNotification('Générateur de convention non disponible', 'error');
+                        return;
+                    }
+                    // IMPORTANT: Précharger les sessions comme en production
+                    let conventionSessions = [];
+                    if (formationToUse?.id) {
+                        conventionSessions = await getSessionsForProject(formationToUse.id);
+                        console.log('🔍 [PROD TEST CONVENTION] Sessions préchargées:', conventionSessions);
+                    }
+                    console.log('🔍 [PROD TEST] formationToUse:', formationToUse);
+                    const conventionData = await getConventionDataFromProject(formationToUse, conventionSessions);
+                    console.log('🔍 [PROD TEST] conventionData:', conventionData);
+                    const conventionParams = getSpecificParams('convention', currentTemplate, sections);
+                    pdfBlob = await window.generateConventionPDF(conventionData, conventionParams);
+                    break;
+
+                case 'emargement':
+                    if (!window.generateEmargementPDF) {
+                        showNotification('Générateur d\'émargement non disponible', 'error');
+                        return;
+                    }
+                    const emargementData = await getEmargementDataFromProject(selectedProject, getSessionsForProject);
+                    pdfBlob = await window.generateEmargementPDF(emargementData, pdfParams);
+                    break;
+
+                case 'qualiopi':
+                    if (!window.generateQualiopiPDF) {
+                        showNotification('Générateur Qualiopi non disponible', 'error');
+                        return;
+                    }
+                    const qualiopiData = selectedEvaluation || getDefaultQualiopiData();
+                    pdfBlob = await window.generateQualiopiPDF(qualiopiData, pdfParams);
+                    break;
+
+                case 'attestation':
+                    if (!window.generateDiplomePDF) {
+                        showNotification('Générateur d\'attestation non disponible', 'error');
+                        return;
+                    }
+                    // Utiliser l'évaluation sélectionnée
+                    const diplomeProdData = await getDiplomeDataFromEvaluation(selectedEvaluation);
+                    pdfBlob = await window.generateDiplomePDF(diplomeProdData, pdfParams);
+                    break;
+
+                default:
+                    showNotification('Type de document non supporté', 'error');
+                    return;
+            }
+
+            const url = URL.createObjectURL(pdfBlob);
+
+            if (previewPdf) {
+                URL.revokeObjectURL(previewPdf);
+            }
+
+            setPreviewPdf(url);
+
+            // Télécharger automatiquement le PDF
+            const fileName = `${selectedDocumentType}_prod_test_${new Date().getTime()}.pdf`;
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showNotification('PDF généré et téléchargé en mode production (test)', 'success');
+            console.log('✅ [PROD TEST] Génération et téléchargement terminés');
+        } catch (error) {
+            console.error('❌ [PROD TEST] Erreur génération:', error);
+            showNotification('Erreur lors de la génération du PDF', 'error');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     // Générer des données par défaut pour convocation
     const getDefaultConvocationData = () => {
         return {
@@ -311,74 +526,24 @@ function TemplateBuilderPage() {
         };
     };
     
-    // Convertir les données projet en données convocation
-    const getConvocationDataFromProject = async (project, sessionsGetter) => {
-        if (!project) return getDefaultConvocationData();
-        
-        const entreprise = project.entreprise || {};
-        const commercial = project.commercial || {};
-        const contact = project.contact || {};
-        const logiciel = project.logiciel || {};
-        
-        // Récupérer les sessions détaillées du projet
-        let sessions = [];
-        try {
-            sessions = await sessionsGetter(project.id);
-        } catch (error) {
-            console.warn('Erreur récupération sessions pour convocation:', error);
-        }
-        
-        // Formater les sessions pour l'affichage
-        const formatSession = (session, index) => {
-            const dateDebut = session.dateDebut;
-            const dateFin = session.dateFin;
-            const lieu = session.lieu || 'Formation à distance';
-            
-            // Format date : si même jour = "le DD/MM/YYYY", sinon "du DD/MM/YYYY au DD/MM/YYYY"
-            let dateText;
-            if (dateDebut.toDateString() === dateFin.toDateString()) {
-                dateText = `le ${dateDebut.toLocaleDateString('fr-FR')}`;
-            } else {
-                dateText = `du ${dateDebut.toLocaleDateString('fr-FR')} au ${dateFin.toLocaleDateString('fr-FR')}`;
-            }
-            
-            return `Session ${index + 1} : ${dateText} à ${lieu}`;
-        };
-        
-        const sessionsFormattees = sessions.length > 0 ? 
-            sessions.map(formatSession) : 
-            [`Session 1 : ${project.periode_souhaitee || 'Dates à définir'} à ${project.lieu_projet || 'Formation à distance'}`];
-        
-        // Récupérer les noms des stagiaires depuis les sessions
-        const stagiairesList = sessions.length > 0 ? 
-            [...new Set(sessions.flatMap(s => s.stagiaires))].join(', ') :
-            `${project.nombre_stagiaire || 1} participant(s) pour ${project.name || 'la formation'}`;
-        
-        return {
-            destinataire: contact.prenom && contact.nom ? 
-                `${contact.prenom.charAt(0).toUpperCase() + contact.prenom.slice(1)} ${contact.nom.toUpperCase()}` : 
-                'Monsieur/Madame',
-            objet: 'Convocation pour une formation',
-            date: new Date().toLocaleDateString('fr-FR'),
-            formation: project.name || 'Formation',
-            concept: logiciel.nom ? `Formation ${logiciel.nom}` : 'Formation spécialisée',
-            // NOUVEAU: Sessions détaillées au lieu de champs agrégés
-            sessions: sessionsFormattees,
-            // Garder les anciens champs comme fallback
-            lieu: project.lieu_projet || 'Formation à distance',
-            dates: project.periode_souhaitee || 'Dates à définir',
-            heures: '09h00 à 12h00 et de 13h00 à 17h00',
-            stagiaires: stagiairesList,
-            signataire: commercial.prenom && commercial.nom ? 
-                `${commercial.prenom} ${commercial.nom}` : 
-                'Geoffrey La MENDOLA',
-            titre_signataire: 'Ingénieur Commercial',
-            // Informations entreprise cliente pour l'adresse en haut à droite
-            entreprise_nom: entreprise.nom || 'Entreprise',
-            entreprise_adresse: entreprise.adresse || 'Adresse non renseignée'
-        };
+    // Utiliser le service centralisé pour les données de convocation
+    const getConvocationDataFromProject = async (project) => {
+        const supabase = window.supabaseConfig.client;
+        return await window.DocumentDataService.getConvocationDataFromProject(project, supabase);
     };
-    
+
+    // Utiliser le service centralisé pour les données de convention
+    const getConventionDataFromProject = async (project, projectSessions = null) => {
+        const supabase = window.supabaseConfig.client;
+        return await window.DocumentDataService.getConventionDataFromProject(project, projectSessions, supabase);
+    };
+
+    // Utiliser le service centralisé pour les données de diplôme
+    const getDiplomeDataFromEvaluation = async (evaluation) => {
+        const supabase = window.supabaseConfig.client;
+        return await window.DocumentDataService.getDiplomeDataFromEvaluation(evaluation, supabase);
+    };
+
     // Convertir les données projet en données émargement
     const getEmargementDataFromProject = async (project, sessionsGetter) => {
         if (!project) return getDefaultEmargementData();
@@ -493,78 +658,14 @@ function TemplateBuilderPage() {
             }
         };
     };
-    
-    // Convertir les données projet en données convention
-    const getConventionDataFromProject = async (project, projectSessions = null) => {
-        if (!project) return getDefaultConventionData();
-        
-        const entreprise = project.entreprise || {};
-        const commercial = project.commercial || {};
-        const contact = project.contact || {};
-        const logiciel = project.logiciel || {};
-        const pdc = project.pdc || {};
-        
-        // Récupérer les sessions si pas fournies
-        let sessions = projectSessions;
-        if (!sessions) {
-            try {
-                sessions = await getSessionsForProject(project.id);
-            } catch (error) {
-                console.warn('Erreur récupération sessions:', error);
-                sessions = [];
-            }
-        }
-        
-        // Extraire le formateur de la première session
-        let formateurInfo = 'Formateur à définir';
-        if (sessions.length > 0 && sessions[0].formateur) {
-            formateurInfo = sessions[0].formateur.nom || 'Formateur à définir';
-        }
-        
-        // Extraire la liste des stagiaires de toutes les sessions
-        const tousLesStagiaires = sessions.flatMap(session => session.stagiaires || []);
-        const stagiairesList = [...new Set(tousLesStagiaires)]; // Supprimer les doublons
-        const stagiairesText = stagiairesList.length > 0 ? 
-            stagiairesList.join(', ') : 
-            `${project.nombre_stagiaire || 1} participant(s)`;
-        
-        // Calculer la durée depuis le PDC
-        const dureeJours = pdc.duree_en_jour || 5;
-        const dureeText = dureeJours === 1 ? '1 jour' : `${dureeJours} jour(s)`;
-        
-        // Générer un numéro de convention basé sur l'année et l'ID du projet
-        const year = new Date().getFullYear();
-        const projectShortId = project.id ? project.id.slice(-8) : '12345678';
-        
-        return {
-            numero: `${year}01 - PR-${projectShortId}`,
-            societe: entreprise.nom || 'Société',
-            adresse: entreprise.adresse || 'Adresse non renseignée',
-            representant: contact.prenom && contact.nom ? 
-                `${contact.prenom.charAt(0).toUpperCase() + contact.prenom.slice(1)} ${contact.nom.toUpperCase()}` : 
-                'Monsieur le Directeur',
-            duree: dureeText, // Durée dynamique depuis PDC
-            formateur: formateurInfo, // Formateur depuis les sessions
-            programme: project.name || 'Formation spécialisée',
-            moyens: 'Formation en présentiel avec supports pédagogiques et exercices pratiques',
-            formation: logiciel.nom ? `Formation ${logiciel.nom}` : project.name || 'Formation',
-            cout: '6750,00', // Valeurs par défaut - à terme, récupérer du devis
-            tva: '1350,00',
-            total: '8100,00',
-            // Nouvelles données pour les articles détaillés
-            stagiaires: stagiairesText, // Liste des noms des stagiaires
-            dates: project.periode_souhaitee || 'Dates à définir selon planning',
-            lieu_type: project.lieu_projet?.toLowerCase().includes('distance') ? 'distance' : 'sur_site',
-            editeur: 'Autodesk', // Valeur par défaut
-            logiciel: logiciel.nom || project.name || 'Logiciel',
-            type_pdc: pdc.nom || project.type_formation || 'Concepts de base'
-        };
-    };
-    
+
+    // Note: getConventionDataFromFormation a été supprimée - utiliser getConventionDataFromProject à la place
+    // car les formations sont en fait des projets avec type='formation'
+
     // Convertir le template en paramètres pour le générateur PDF
-    const convertTemplateToParams = (template) => {
+    const convertTemplateToParams = (template, layoutSections = null) => {
         if (!template) return {};
-        
+
         return {
             titleSize: template.styles?.titleSize || 28,
             subtitleSize: template.styles?.subtitleSize || 16,
@@ -608,25 +709,26 @@ function TemplateBuilderPage() {
             headerLogoLeft: getImageUrl(template.header_image),
             headerLogoRight: null,
             footerLogoLeft: getImageUrl(template.footer_image),
-            footerLogoRight: null
+            footerLogoRight: null,
+            sections: layoutSections || [] // Ajouter les sections pour le layout dynamique
         };
     };
     
     // Fonction pour obtenir des paramètres spécifiques selon le type de document
-    const getSpecificParams = (documentType, template) => {
-        const baseParams = convertTemplateToParams(template);
-        
+    const getSpecificParams = (documentType, template, layoutSections = null) => {
+        const baseParams = convertTemplateToParams(template, layoutSections);
+
         // Paramètres spécifiques pour Convention (tailles en points jsPDF)
         if (documentType === 'convention') {
             return {
                 ...baseParams,
                 titleSize: 15,        // 15pt
-                subtitleSize: 10,     // 10pt  
+                subtitleSize: 10,     // 10pt
                 textSize: 8,          // 8pt
                 articleSize: 9        // 9pt en gras
             };
         }
-        
+
         // Pour tous les autres types (PDC, Convocation, Émargement), utiliser les valeurs par défaut
         return baseParams;
     };
@@ -653,53 +755,55 @@ function TemplateBuilderPage() {
         const currentImageUrl = currentTemplate[imageType];
         const displayUrl = getImageUrl(currentImageUrl);
         const hasError = imageErrors[imageType];
-        
-        const handleImageError = () => {
-            console.error(`Erreur chargement image ${imageType}:`, displayUrl);
-            setImageErrors(prev => ({ ...prev, [imageType]: true }));
-            showNotification(`Erreur chargement ${label.toLowerCase()}`, 'error');
+
+        // Extraire le nom du fichier depuis l'URL
+        const getFileNameFromUrl = (url) => {
+            if (!url) return null;
+            try {
+                const parts = url.split('/');
+                const fileName = parts[parts.length - 1];
+                return decodeURIComponent(fileName);
+            } catch (error) {
+                return url;
+            }
         };
-        
-        const handleImageLoad = () => {
-            // Reset error state when image loads successfully
-            setImageErrors(prev => ({ ...prev, [imageType]: false }));
-        };
-        
-        return React.createElement('div', { className: 'mb-4' },
+
+        const fileName = getFileNameFromUrl(displayUrl);
+
+        return React.createElement('div', { className: 'flex-1' },
             React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, label),
-            React.createElement('div', { className: 'flex items-center gap-3' },
-                React.createElement('div', { className: 'relative' },
-                    displayUrl && !hasError ? [
-                        React.createElement('img', {
-                            key: 'image',
-                            src: displayUrl,
-                            alt: label,
-                            className: 'w-16 h-16 object-contain border border-gray-200 rounded',
-                            onError: handleImageError,
-                            onLoad: handleImageLoad
-                        }),
+            React.createElement('div', { className: 'flex flex-col gap-3' },
+                React.createElement('div', { className: 'relative flex items-center gap-2' },
+                    displayUrl && !hasError && fileName ? [
+                        React.createElement('div', {
+                            key: 'filename',
+                            className: 'flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700 truncate',
+                            title: fileName
+                        }, fileName),
                         currentImageUrl && React.createElement('button', {
                             key: 'delete',
                             onClick: () => handleImageDelete(imageType),
-                            className: 'absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600',
+                            className: 'bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm hover:bg-red-600 flex-shrink-0',
                             title: 'Supprimer l\'image'
                         }, '×')
-                    ] : React.createElement('div', { 
-                        className: `w-16 h-16 border-2 border-dashed rounded flex items-center justify-center text-xs ${
-                            hasError ? 'border-red-300 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400'
-                        }` 
-                    }, hasError ? 'Erreur' : 'Pas d\'image')
+                    ] : React.createElement('div', {
+                        className: `flex-1 px-3 py-2 border-2 border-dashed rounded flex items-center justify-center text-xs ${
+                            hasError ? 'border-red-300 bg-red-50 text-red-500' : 'border-gray-300 text-gray-400 bg-gray-50'
+                        }`
+                    }, hasError ? 'Erreur' : 'Aucune image sélectionnée')
                 ),
                 React.createElement('div', { className: 'flex flex-col gap-2' },
-                    React.createElement('input', {
-                        type: 'file',
-                        accept: 'image/*',
-                        onChange: (e) => handleImageUpload(e.target.files[0], imageType),
-                        className: 'text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100',
+                    React.createElement('button', {
+                        type: 'button',
+                        onClick: () => setImageModalOpen(imageType),
+                        className: 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2',
                         disabled: uploadingImages[imageType]
-                    }),
-                    uploadingImages[imageType] && React.createElement('div', { 
-                        className: 'text-sm text-blue-600 flex items-center gap-2' 
+                    }, [
+                        React.createElement('i', { key: 'icon', 'data-lucide': 'image', className: 'w-4 h-4' }),
+                        React.createElement('span', { key: 'text' }, 'Choisir une image')
+                    ]),
+                    uploadingImages[imageType] && React.createElement('div', {
+                        className: 'text-sm text-blue-600 flex items-center gap-2'
                     }, [
                         React.createElement('div', { key: 'spinner', className: 'animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600' }),
                         React.createElement('span', { key: 'text' }, 'Upload en cours...')
@@ -716,8 +820,16 @@ function TemplateBuilderPage() {
             if (selectedDocumentType === 'pdc' && !selectedPdc) {
                 return;
             }
-            // Pour convocation, convention et émargement, on a besoin d'un projet sélectionné
-            if ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) {
+            // Pour convocation et convention, on a besoin d'une formation sélectionnée
+            if ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention') && !selectedFormation) {
+                return;
+            }
+            // Pour émargement, on a besoin d'un projet sélectionné
+            if (selectedDocumentType === 'emargement' && !selectedProject) {
+                return;
+            }
+            // Pour attestation et qualiopi, on a besoin d'une évaluation sélectionnée
+            if ((selectedDocumentType === 'attestation' || selectedDocumentType === 'qualiopi') && !selectedEvaluation) {
                 return;
             }
 
@@ -726,7 +838,7 @@ function TemplateBuilderPage() {
             }, 500);
             return () => clearTimeout(timeoutId);
         }
-    }, [currentTemplate, selectedPdc, selectedProject, selectedEvaluation, selectedDocumentType]);
+    }, [currentTemplate, selectedPdc, selectedProject, selectedFormation, selectedEvaluation, selectedDocumentType]);
     
     // Auto-sauvegarde
     useEffect(() => {
@@ -779,257 +891,333 @@ function TemplateBuilderPage() {
             )
         ),
         
-        // Sélecteur de type de document
-        React.createElement('div', { className: 'mb-6' },
-            React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-4' },
-                React.createElement('div', { className: 'flex items-center gap-4' },
-                    React.createElement('h2', { className: 'text-lg font-semibold text-gray-900' }, 'Type de document :'),
-                    React.createElement('div', { className: 'flex gap-2' },
-                        documentTypes.map(docType =>
-                            React.createElement('button', {
-                                key: docType.id,
-                                onClick: () => !docType.disabled && setSelectedDocumentType(docType.id),
-                                className: `px-4 py-2 rounded-lg border transition-all ${
-                                    selectedDocumentType === docType.id
-                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                        : docType.disabled
-                                        ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                                }`
-                            },
-                                React.createElement('div', { className: 'flex items-center gap-2' },
-                                    React.createElement('i', { 'data-lucide': docType.icon, className: 'w-4 h-4' }),
-                                    React.createElement('span', { className: 'text-sm' }, docType.label)
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ),
-        
-        // Layout principal
-        React.createElement('div', { className: 'flex gap-6 flex-1' },
-            
-            // Colonne paramètres
-            React.createElement('div', { 
-                className: 'space-y-6 overflow-y-auto',
-                style: { width: '350px', flexShrink: 0 }
-            },
-                
-                // Images
-                React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-6' },
-                    React.createElement('h2', { className: 'text-xl font-semibold mb-4' }, 'Images'),
-                    React.createElement('div', { className: 'space-y-4' },
-                        createImageSection('header_image', 'Image d\'en-tête'),
-                        createImageSection('footer_image', 'Image de pied de page')
-                    )
-                ),
-                
-                // Données de test
-                React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-6' },
-                    React.createElement('h2', { className: 'text-xl font-semibold mb-4' }, 'Données de test'),
-                    selectedDocumentType === 'pdc' ? (
-                        pdcsLoading ? 
-                            React.createElement('div', { className: 'text-center py-4' }, 'Chargement...') :
-                            React.createElement('div', { className: 'space-y-3' },
-                                React.createElement('select', {
-                                    value: selectedPdc?.id || '',
-                                    onChange: (e) => {
-                                        const pdc = pdcs.find(p => p.id === e.target.value);
-                                        setSelectedPdc(pdc);
-                                    },
-                                    className: 'w-full p-2 border border-gray-300 rounded-md'
-                                },
-                                    React.createElement('option', { value: '' }, 'Sélectionner un PDC...'),
-                                    pdcs?.map(pdc => 
-                                        React.createElement('option', { 
-                                            key: pdc.id, 
-                                            value: pdc.id 
-                                        }, `PDC ${pdc.pdc_number} - ${pdc.logiciel?.nom || 'N/A'}`)
-                                    )
-                                ),
-                                selectedPdc && React.createElement('div', { className: 'p-3 bg-blue-50 rounded-md text-sm text-blue-700' },
-                                    `PDC ${selectedPdc.pdc_number} - ${selectedPdc.logiciel?.nom || 'N/A'}`
-                                )
-                            )
-                    ) : (selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') ? (
-                        projectsLoading ?
-                            React.createElement('div', { className: 'text-center py-4' }, 'Chargement des projets...') :
-                            React.createElement('div', { className: 'space-y-3' },
-                                React.createElement('select', {
-                                    value: selectedProject?.id || '',
-                                    onChange: (e) => {
-                                        const project = projects.find(p => p.id === e.target.value);
-                                        setSelectedProject(project);
-                                    },
-                                    className: 'w-full p-2 border border-gray-300 rounded-md'
-                                },
-                                    React.createElement('option', { value: '' }, 'Sélectionner un projet...'),
-                                    projects?.map(project =>
-                                        React.createElement('option', {
-                                            key: project.id,
-                                            value: project.id
-                                        }, `${project.name} - ${project.entreprise?.nom || 'N/A'} (${project.nombre_stagiaire || 0} stagiaires)`)
-                                    )
-                                ),
-                                selectedProject && React.createElement('div', { 
-                                    className: selectedDocumentType === 'convocation' ? 
-                                        'p-3 bg-green-50 rounded-md text-sm text-green-700' : 
-                                        selectedDocumentType === 'convention' ?
-                                        'p-3 bg-purple-50 rounded-md text-sm text-purple-700' :
-                                        'p-3 bg-orange-50 rounded-md text-sm text-orange-700'
-                                },
-                                    React.createElement('div', { className: 'font-medium mb-2' }, 
-                                        selectedDocumentType === 'convocation' ? 'Données projet - Convocation' : 
-                                        selectedDocumentType === 'convention' ? 'Données projet - Convention' :
-                                        'Données projet - Émargement'
-                                    ),
-                                    React.createElement('div', {}, `• Projet : ${selectedProject.name}`),
-                                    React.createElement('div', {}, `• Entreprise : ${selectedProject.entreprise?.nom || 'N/A'}`),
-                                    React.createElement('div', {}, `• Logiciel : ${selectedProject.logiciel?.nom || 'N/A'}`),
-                                    React.createElement('div', {}, `• Commercial : ${selectedProject.commercial?.prenom || ''} ${selectedProject.commercial?.nom || 'N/A'}`),
-                                    React.createElement('div', {}, `• Contact : ${selectedProject.contact?.prenom || ''} ${selectedProject.contact?.nom || 'N/A'}`),
-                                    // Affichage du formateur depuis les sessions
-                                    projectSessions.length > 0 && projectSessions[0].formateur && 
-                                        React.createElement('div', {},
-                                            '• Formateur : ',
-                                            React.createElement('span', { className: 'font-bold' }, projectSessions[0].formateur.nom)
-                                        ),
-                                    // Affichage de la liste des stagiaires depuis les sessions
-                                    (() => {
-                                        const tousLesStagiaires = projectSessions.flatMap(session => session.stagiaires || []);
-                                        const stagiairesList = [...new Set(tousLesStagiaires)];
-                                        if (stagiairesList.length > 0) {
-                                            return React.createElement('div', {},
-                                                '• Stagiaires : ',
-                                                React.createElement('span', { className: 'font-bold' }, stagiairesList.join(', '))
-                                            );
-                                        } else {
-                                            return React.createElement('div', {},
-                                                '• Stagiaires : ',
-                                                React.createElement('span', { className: 'font-bold' }, `${selectedProject.nombre_stagiaire || 0} participant(s)`)
-                                            );
-                                        }
-                                    })(),
-                                    // Affichage du lieu depuis les sessions avec formatage par session
-                                    (() => {
-                                        // Formater comme "Session 1: lieu1, Session 2: lieu2"
-                                        const sessionsAvecLieux = projectSessions
-                                            .map((session, index) => {
-                                                const lieu = session.lieu || 'à distance';
-                                                return `Session ${index + 1}: ${lieu}`;
-                                            })
-                                            .filter(sessionText => sessionText);
-                                        
-                                        let lieuText;
-                                        if (sessionsAvecLieux.length > 0) {
-                                            lieuText = sessionsAvecLieux.join(', ');
-                                        } else {
-                                            // Fallback vers logique simple ou lieu du projet
-                                            const lieuxUniques = [...new Set(projectSessions.map(s => s.lieu).filter(lieu => lieu))];
-                                            lieuText = lieuxUniques.length > 0 ? 
-                                                lieuxUniques.join(' et ') : 
-                                                selectedProject.lieu_projet;
-                                        }
-                                        
-                                        if (lieuText) {
-                                            return React.createElement('div', {},
-                                                '• Lieu : ',
-                                                React.createElement('span', { className: 'font-bold' }, lieuText)
-                                            );
-                                        }
-                                        return null;
-                                    })(),
-                                    selectedProject.periode_souhaitee && React.createElement('div', {}, `• Période : ${selectedProject.periode_souhaitee}`)
-                                )
-                            )
-                    ) : selectedDocumentType === 'qualiopi' ? (
-                        evaluationsLoading ?
-                            React.createElement('div', { className: 'text-center py-4' }, 'Chargement des évaluations...') :
-                            React.createElement('div', { className: 'space-y-3' },
-                                React.createElement('select', {
-                                    value: selectedEvaluation?.id || '',
-                                    onChange: (e) => {
-                                        const evaluation = evaluations.find(ev => ev.id === e.target.value);
-                                        setSelectedEvaluation(evaluation);
-                                    },
-                                    className: 'w-full p-2 border border-gray-300 rounded-md'
-                                },
-                                    React.createElement('option', { value: '' }, 'Sélectionner une évaluation...'),
-                                    evaluations?.map(evaluation =>
-                                        React.createElement('option', {
-                                            key: evaluation.id,
-                                            value: evaluation.id
-                                        }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'} - ${evaluation.formation?.prj || 'N/A'}`)
-                                    )
-                                ),
-                                selectedEvaluation && React.createElement('div', {
-                                    className: 'p-3 bg-purple-50 rounded-md text-sm text-purple-700'
-                                },
-                                    React.createElement('div', { className: 'font-medium mb-2' }, 'Données évaluation - Qualiopi'),
-                                    React.createElement('div', {}, `• Stagiaire : ${selectedEvaluation.stagiaire_prenom} ${selectedEvaluation.stagiaire_nom}`),
-                                    React.createElement('div', {}, `• Société : ${selectedEvaluation.stagiaire_societe || 'N/A'}`),
-                                    React.createElement('div', {}, `• Email : ${selectedEvaluation.stagiaire_email || 'N/A'}`),
-                                    React.createElement('div', {}, `• Formation : ${selectedEvaluation.formation?.pdc?.ref || 'N/A'}`),
-                                    React.createElement('div', {}, `• PRJ : ${selectedEvaluation.formation?.prj || 'N/A'}`),
-                                    selectedEvaluation.qualiopi_themes && React.createElement('div', {},
-                                        `• Thèmes : ${Object.keys(selectedEvaluation.qualiopi_themes).length} compétences évaluées`
-                                    )
-                                )
-                            )
-                    ) : (
-                        React.createElement('div', { className: 'text-center py-4 text-gray-500' },
-                            'Sélectionnez un type de document actif')
+        // Section Type de document + Données de test (NOUVELLE STRUCTURE)
+        React.createElement('div', { className: 'mb-6 flex gap-4' }, [
+
+            // Type de document (35%)
+            React.createElement('div', { key: 'type', className: 'flex-[35] bg-white rounded-lg shadow-md p-4' },
+                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Type de document'),
+                React.createElement('select', {
+                    value: selectedDocumentType,
+                    onChange: (e) => setSelectedDocumentType(e.target.value),
+                    className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                },
+                    documentTypes.map(docType =>
+                        React.createElement('option', {
+                            key: docType.id,
+                            value: docType.id,
+                            disabled: docType.disabled
+                        }, docType.label)
                     )
                 )
             ),
-            
-            // Colonne prévisualisation
-            React.createElement('div', { className: 'flex-1' },
-                React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-4 h-full flex flex-col' },
-                    React.createElement('div', { className: 'flex items-center justify-between mb-4' },
-                        React.createElement('h2', { className: 'text-xl font-semibold' }, 'Prévisualisation PDF'),
-                        React.createElement('button', {
-                            onClick: generatePreview,
-                            disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation),
-                            className: 'bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50'
-                        }, isGenerating ? 'Génération...' : 'Actualiser')
-                    ),
-                    
-                    React.createElement('div', { className: 'border border-gray-200 rounded-lg overflow-hidden flex-1' },
-                        (selectedDocumentType === 'pdc' && !selectedPdc) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
-                                'Sélectionnez un PDC pour commencer') :
-                        ((selectedDocumentType === 'convocation' || selectedDocumentType === 'convention' || selectedDocumentType === 'emargement') && !selectedProject) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
-                                'Sélectionnez un projet pour commencer') :
-                        (selectedDocumentType === 'qualiopi' && !selectedEvaluation) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
-                                'Sélectionnez une évaluation pour commencer') :
-                        (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement' && selectedDocumentType !== 'qualiopi')) ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
-                                'Sélectionnez un type de document pour commencer') :
-                        isGenerating ?
-                            React.createElement('div', { className: 'flex items-center justify-center h-full' },
-                                React.createElement('div', { className: 'text-center' },
-                                    React.createElement('div', { className: 'animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2' }),
-                                    React.createElement('div', { className: 'text-gray-600' }, 'Génération du PDF...')
-                                )
-                            ) :
-                        previewPdf ?
-                            React.createElement('iframe', {
-                                src: `${previewPdf}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`,
-                                className: 'w-full h-full border-0',
-                                title: 'PDF Preview'
-                            }) :
-                            React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' }, 
-                                'Cliquez sur "Actualiser" pour voir la prévisualisation')
-                    )
+
+            // Données de test (65%)
+            React.createElement('div', { key: 'data', className: 'flex-[65] bg-white rounded-lg shadow-md p-4' },
+                React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-2' }, 'Données de test'),
+                selectedDocumentType === 'pdc' ? (
+                    pdcsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement...') :
+                        React.createElement('select', {
+                            value: selectedPdc?.id || '',
+                            onChange: (e) => {
+                                const pdc = pdcs.find(p => p.id === e.target.value);
+                                setSelectedPdc(pdc);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner un PDC...'),
+                            pdcs?.map(pdc =>
+                                React.createElement('option', {
+                                    key: pdc.id,
+                                    value: pdc.id
+                                }, `PDC ${pdc.pdc_number} - ${pdc.logiciel?.nom || 'N/A'}`)
+                            )
+                        )
+                ) : selectedDocumentType === 'convocation' ? (
+                    formationsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des formations...') :
+                        React.createElement('select', {
+                            value: selectedFormation?.id || '',
+                            onChange: (e) => {
+                                const formation = formations.find(f => f.id === e.target.value);
+                                setSelectedFormation(formation);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner une formation...'),
+                            formations?.map(formation =>
+                                React.createElement('option', {
+                                    key: formation.id,
+                                    value: formation.id
+                                }, `${formation.prj} - ${formation.pdc?.ref || 'N/A'} (${formation.nombre_stagiaire || 0} stagiaires)`)
+                            )
+                        )
+                ) : selectedDocumentType === 'convention' ? (
+                    formationsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des formations...') :
+                        React.createElement('select', {
+                            value: selectedFormation?.id || '',
+                            onChange: (e) => {
+                                const formation = formations.find(f => f.id === e.target.value);
+                                setSelectedFormation(formation);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner une formation...'),
+                            formations?.map(formation =>
+                                React.createElement('option', {
+                                    key: formation.id,
+                                    value: formation.id
+                                }, `${formation.prj} - ${formation.pdc?.ref || 'N/A'} (${formation.nombre_stagiaire || 0} stagiaires)`)
+                            )
+                        )
+                ) : selectedDocumentType === 'emargement' ? (
+                    projectsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des projets...') :
+                        React.createElement('select', {
+                            value: selectedProject?.id || '',
+                            onChange: (e) => {
+                                const project = projects.find(p => p.id === e.target.value);
+                                setSelectedProject(project);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner un projet...'),
+                            projects?.map(project =>
+                                React.createElement('option', {
+                                    key: project.id,
+                                    value: project.id
+                                }, `${project.name} - ${project.entreprise?.nom || 'N/A'} (${project.nombre_stagiaire || 0} stagiaires)`)
+                            )
+                        )
+                ) : selectedDocumentType === 'qualiopi' ? (
+                    evaluationsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des évaluations...') :
+                        React.createElement('select', {
+                            value: selectedEvaluation?.id || '',
+                            onChange: (e) => {
+                                const evaluation = evaluations.find(ev => ev.id === e.target.value);
+                                setSelectedEvaluation(evaluation);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner une évaluation...'),
+                            evaluations?.map(evaluation =>
+                                React.createElement('option', {
+                                    key: evaluation.id,
+                                    value: evaluation.id
+                                }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'} - ${evaluation.formation?.prj || 'N/A'}`)
+                            )
+                        )
+                ) : selectedDocumentType === 'attestation' ? (
+                    evaluationsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des évaluations...') :
+                        React.createElement('select', {
+                            value: selectedEvaluation?.id || '',
+                            onChange: (e) => {
+                                const evaluation = evaluations.find(ev => ev.id === e.target.value);
+                                setSelectedEvaluation(evaluation);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner une évaluation...'),
+                            evaluations?.map(evaluation =>
+                                React.createElement('option', {
+                                    key: evaluation.id,
+                                    value: evaluation.id
+                                }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'}`)
+                            )
+                        )
+                ) : (
+                    React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' },
+                        'Sélectionnez un type de document')
                 )
             )
+        ]),
+
+        // Layout principal - VERTICAL
+        React.createElement('div', { className: 'flex flex-col gap-6 flex-1' },
+
+            // Rangée horizontale: Layout Editor + Prévisualisation
+            React.createElement('div', { className: 'flex-1 flex gap-6' }, [
+
+                // Mise en page : Images + Layout Editor (1/3)
+                React.createElement('div', {
+                    key: 'layout-editor',
+                    className: 'flex-[1] bg-white rounded-lg shadow-md overflow-hidden flex flex-col'
+                }, [
+                    // Section Images (pliable)
+                    React.createElement('div', {
+                        key: 'images-section',
+                        className: 'border-b border-gray-200'
+                    }, [
+                        // Header avec toggle
+                        React.createElement('button', {
+                            key: 'toggle',
+                            onClick: () => setImagesExpanded(!imagesExpanded),
+                            className: 'w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors'
+                        }, [
+                            React.createElement('span', {
+                                key: 'title',
+                                className: 'text-sm font-semibold text-gray-700'
+                            }, 'Images'),
+                            React.createElement('i', {
+                                key: 'icon',
+                                'data-lucide': imagesExpanded ? 'chevron-up' : 'chevron-down',
+                                className: 'w-4 h-4 text-gray-500'
+                            })
+                        ]),
+                        // Contenu pliable
+                        imagesExpanded && React.createElement('div', {
+                            key: 'content',
+                            className: 'p-4 space-y-4 bg-gray-50'
+                        }, [
+                            createImageSection('header_image', 'En-tête'),
+                            createImageSection('footer_image', 'Pied de page')
+                        ])
+                    ]),
+                    // Layout Editor
+                    React.createElement('div', {
+                        key: 'layout',
+                        className: 'flex-1 overflow-hidden'
+                    },
+                        sections.length > 0 && React.createElement(window.TemplateLayoutEditor, {
+                            documentType: selectedDocumentType,
+                            sections: sections,
+                            onSectionsChange: (updatedSections) => setSections(updatedSections),
+                            selectedSectionId: selectedSectionId,
+                            onSectionSelect: (sectionId) => setSelectedSectionId(sectionId)
+                        })
+                    )
+                ]),
+
+                // Section prévisualisation (2/3)
+                React.createElement('div', {
+                    key: 'preview',
+                    className: 'flex-[2]'
+                },
+                    React.createElement('div', { className: 'bg-white rounded-lg shadow-md p-4 h-full flex flex-col' },
+                        React.createElement('div', { className: 'flex items-center justify-between mb-4' },
+                            React.createElement('div', { className: 'flex items-center gap-4' }, [
+                                React.createElement('h2', { key: 'title', className: 'text-xl font-semibold' }, 'Prévisualisation'),
+                                // Toggle mode visuel / PDF
+                                React.createElement('div', {
+                                    key: 'toggle',
+                                    className: 'flex bg-gray-100 rounded-lg p-1'
+                                }, [
+                                    React.createElement('button', {
+                                        key: 'visual',
+                                        onClick: () => setViewMode('visual'),
+                                        className: `px-4 py-1 rounded-md text-sm transition-colors ${
+                                            viewMode === 'visual'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                        }`
+                                    }, 'Mode visuel'),
+                                    React.createElement('button', {
+                                        key: 'pdf',
+                                        onClick: () => setViewMode('pdf'),
+                                        className: `px-4 py-1 rounded-md text-sm transition-colors ${
+                                            viewMode === 'pdf'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'text-gray-600 hover:text-gray-900'
+                                        }`
+                                    }, 'Mode PDF')
+                                ])
+                            ]),
+                            viewMode === 'pdf' && React.createElement('div', { className: 'flex gap-2' }, [
+                                React.createElement('button', {
+                                    key: 'preview',
+                                    onClick: generatePreview,
+                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation),
+                                    className: 'bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50'
+                                }, isGenerating ? 'Génération...' : 'Actualiser'),
+                                React.createElement('button', {
+                                    key: 'prod-test',
+                                    onClick: generateProdTest,
+                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation),
+                                    className: 'bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50'
+                                }, isGenerating ? 'Génération...' : 'Prod Test')
+                            ])
+                        ),
+
+                        React.createElement('div', {
+                            className: 'border border-gray-200 rounded-lg overflow-hidden flex-1 relative',
+                            style: { overflow: 'hidden' }
+                        },
+                            // Mode visuel : Afficher le VisualLayoutEditor
+                            viewMode === 'visual' ?
+                                React.createElement(window.VisualLayoutEditor, {
+                                    sections: sections,
+                                    selectedSectionId: selectedSectionId,
+                                    onSectionsChange: (updatedSections) => setSections(updatedSections),
+                                    onSectionSelect: (sectionId) => setSelectedSectionId(sectionId)
+                                }) :
+                            // Mode PDF : Afficher la prévisualisation PDF
+                            (selectedDocumentType === 'pdc' && !selectedPdc) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez un PDC pour commencer') :
+                            (selectedDocumentType === 'convocation' && !selectedFormation) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez une formation pour commencer') :
+                            (selectedDocumentType === 'convention' && !selectedFormation) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez une formation pour commencer') :
+                            (selectedDocumentType === 'emargement' && !selectedProject) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez un projet pour commencer') :
+                            (selectedDocumentType === 'qualiopi' && !selectedEvaluation) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez une évaluation pour commencer') :
+                            (selectedDocumentType === 'attestation' && !selectedEvaluation) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez une évaluation pour commencer') :
+                            (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement' && selectedDocumentType !== 'qualiopi' && selectedDocumentType !== 'attestation')) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez un type de document pour commencer') :
+                            isGenerating ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full' },
+                                    React.createElement('div', { className: 'text-center' },
+                                        React.createElement('div', { className: 'animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2' }),
+                                        React.createElement('div', { className: 'text-gray-600' }, 'Génération du PDF...')
+                                    )
+                                ) :
+                            previewPdf ?
+                                React.createElement('iframe', {
+                                    key: 'iframe',
+                                    ref: iframeRef,
+                                    src: `${previewPdf}#toolbar=0&navpanes=0&scrollbar=0&view=FitV&zoom=page-fit`,
+                                    className: 'w-full h-full border-0',
+                                    title: 'PDF Preview',
+                                    style: { touchAction: 'none', userSelect: 'none' },
+                                    onWheel: (e) => {
+                                        // Bloquer le zoom avec Ctrl+molette
+                                        if (e.ctrlKey) {
+                                            e.preventDefault();
+                                        }
+                                    }
+                                }) :
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Cliquez sur "Actualiser" pour voir la prévisualisation')
+                        )
+                    )
+                )
+            ])
         ),
-        
+
+        // Modal de sélection d'image (partagée entre tous les templates)
+        imageModalOpen && React.createElement(window.ImageSelectorModal, {
+            imageType: imageModalOpen,
+            onSelect: (url) => {
+                // Mettre à jour le template avec l'URL de l'image sélectionnée
+                setCurrentTemplate(prev => ({ ...prev, [imageModalOpen]: url }));
+                setImageModalOpen(null);
+                showNotification('Image sélectionnée avec succès', 'success');
+            },
+            onClose: () => setImageModalOpen(null)
+        }),
+
         // Notification toast
         notification && React.createElement('div', {
             className: `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
@@ -1049,37 +1237,6 @@ function TemplateBuilderPage() {
         )
     );
 }
-
-// FONCTION DE TEST TEMPORAIRE pour vérifier les données de test
-window.testTemplateBuilderData = () => {
-    const { projects } = window.useProjects();
-    const { getSessionsForProject } = window.useProjectSessions();
-    
-    console.log('🧪 [TEST Template Builder] Projets disponibles:', projects);
-    
-    if (projects && projects.length > 0) {
-        const testProject = projects.find(p => 
-            p.name?.toLowerCase().includes('3ds max') ||
-            p.entreprise?.nom?.toLowerCase().includes('design studio')
-        ) || projects[0];
-        
-        console.log('🧪 [TEST Template Builder] Projet de test sélectionné:', testProject);
-        
-        // Tester le chargement des sessions
-        getSessionsForProject(testProject.id).then(sessions => {
-            console.log('🧪 [TEST Template Builder] Sessions récupérées:', sessions);
-            
-            if (sessions.length > 0) {
-                console.log('🧪 [TEST Template Builder] Formateur première session:', sessions[0].formateur);
-                console.log('🧪 [TEST Template Builder] Stagiaires toutes sessions:', 
-                    sessions.flatMap(s => s.stagiaires || [])
-                );
-            }
-        }).catch(error => {
-            console.error('❌ [TEST Template Builder] Erreur récupération sessions:', error);
-        });
-    }
-};
 
 // Export global
 window.TemplateBuilderPage = TemplateBuilderPage;

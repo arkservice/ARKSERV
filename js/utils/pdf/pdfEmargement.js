@@ -3,8 +3,9 @@
 (function() {
     'use strict';
 
-    // Récupérer les utilitaires depuis window.pdfCore
+    // Récupérer les utilitaires depuis window.pdfCore et pdfSectionMapper
     const { hexToRgb, addImageToPdf } = window.pdfCore;
+    const { getSectionPositions } = window.pdfSectionMapper;
 
 async function generateEmargementPDF(emargementData, layoutParams = {}) {
     console.log('🔧 [DEBUG] generateEmargementPDF appelée');
@@ -39,6 +40,11 @@ async function generateEmargementPDF(emargementData, layoutParams = {}) {
 
     const params = { ...defaultParams, ...layoutParams };
 
+    // Calculer les positions des sections depuis la configuration
+    const sections = params.sections || [];
+    const positions = getSectionPositions(sections);
+    console.log('📐 [pdfEmargement] Positions calculées:', positions);
+
     // Créer le document PDF A4 PAYSAGE (297x210mm)
     const doc = new jsPDF({
         orientation: 'landscape', // FORMAT PAYSAGE
@@ -56,27 +62,47 @@ async function generateEmargementPDF(emargementData, layoutParams = {}) {
     const grayColor = hexToRgb(params.grayColor) || params.grayColor;
 
     // === SECTION HEADER (297x26mm) ===
-    await renderEmargementHeader(doc, emargementData, params, pageWidth);
+    await renderEmargementHeader(doc, emargementData, params, pageWidth, positions);
 
     // === SECTION CONTENU PRINCIPAL ===
-    renderEmargementContent(doc, emargementData, params, pageWidth, pageHeight);
+    renderEmargementContent(doc, emargementData, params, pageWidth, pageHeight, positions);
 
     // === SECTION FOOTER (297x52mm) ===
-    await renderEmargementFooter(doc, emargementData, params, pageWidth, pageHeight);
+    await renderEmargementFooter(doc, emargementData, params, pageWidth, pageHeight, positions);
 
     return doc.output('blob');
 }
 
 // Rendu du header spécifique émargement (297x26mm)
-async function renderEmargementHeader(doc, data, params, pageWidth) {
+async function renderEmargementHeader(doc, data, params, pageWidth, positions) {
     console.log('🎨 [DEBUG] Rendu header émargement');
+
+    // === SECTION HEADER ===
+    const headerSection = positions.header || { y: 0, height: 26, width: pageWidth };
+
+    // Add background if configured
+    if (params.headerBackground) {
+        const { hexToRgb } = window.pdfCore;
+        const bgColor = hexToRgb(params.headerBackground) || params.headerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, headerSection.y, headerSection.width, headerSection.height, 'F');
+    }
+
+    // Handle padding
+    const headerPadding = params.headerPadding || 0;
+    const headerImageX = headerPadding;
+    const headerImageY = headerSection.y + headerPadding;
+    const headerImageWidth = headerSection.width - (2 * headerPadding);
+    const headerImageHeight = headerSection.height - (2 * headerPadding);
 
     // Header avec logo
     const headerImageAdded = await addImageToPdf(
         doc,
         params.headerLogoLeft,
-        0, 0,         // Position
-        pageWidth, 26, // Dimensions : 297x26mm
+        headerImageX,
+        headerImageY,
+        headerImageWidth,
+        headerImageHeight,
         params.companyName
     );
 
@@ -86,18 +112,20 @@ async function renderEmargementHeader(doc, data, params, pageWidth) {
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(19, 62, 94); // Bleu ARKANCE
         const arkanceWidth = doc.getTextWidth('ARKANCE');
-        doc.text('ARKANCE', pageWidth - 10 - arkanceWidth, 16);
+        doc.text('ARKANCE', pageWidth - 10 - arkanceWidth, headerSection.y + 16);
     }
 }
 
 // Rendu du contenu principal émargement
-function renderEmargementContent(doc, data, params, pageWidth, pageHeight) {
+function renderEmargementContent(doc, data, params, pageWidth, pageHeight, positions) {
     console.log('📋 [DEBUG] Rendu contenu émargement');
 
     const primaryColor = hexToRgb(params.primaryColor) || params.primaryColor;
     const grayColor = hexToRgb(params.grayColor) || params.grayColor;
 
-    let yPos = 30; // Début après header (26mm + marge)
+    // === SECTION CONTENT ===
+    const contentSection = positions.content || { y: 26, height: 132, width: pageWidth };
+    let yPos = contentSection.y + 4; // Début après header avec marge
 
     // === TITRE ET INFORMATIONS GÉNÉRALES ===
     doc.setFontSize(params.titleSize);
@@ -249,17 +277,36 @@ function renderEmargementGrid(doc, data, params, pageWidth, startY) {
 }
 
 // Rendu du footer spécifique émargement (297x52mm)
-async function renderEmargementFooter(doc, data, params, pageWidth, pageHeight) {
+async function renderEmargementFooter(doc, data, params, pageWidth, pageHeight, positions) {
     console.log('🦶 [DEBUG] Rendu footer émargement');
 
-    const footerStartY = pageHeight - 52; // 52mm depuis le bas
+    // === SECTION FOOTER ===
+    const footerSection = positions.footer || { y: pageHeight - 52, height: 52, width: pageWidth };
+    const footerStartY = footerSection.y;
+
+    // Add background if configured
+    if (params.footerBackground) {
+        const { hexToRgb } = window.pdfCore;
+        const bgColor = hexToRgb(params.footerBackground) || params.footerBackground;
+        doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+        doc.rect(0, footerSection.y, footerSection.width, footerSection.height, 'F');
+    }
+
+    // Handle padding
+    const footerPadding = params.footerPadding || 0;
+    const footerImageX = footerPadding;
+    const footerImageY = footerSection.y + footerPadding;
+    const footerImageWidth = footerSection.width - (2 * footerPadding);
+    const footerImageHeight = footerSection.height - (2 * footerPadding);
 
     // Footer avec logo
     const footerImageAdded = await addImageToPdf(
         doc,
         params.footerLogoLeft,
-        0, footerStartY,    // Position
-        pageWidth, 52,      // Dimensions : 297x52mm
+        footerImageX,
+        footerImageY,
+        footerImageWidth,
+        footerImageHeight,
         params.footerContact
     );
 
