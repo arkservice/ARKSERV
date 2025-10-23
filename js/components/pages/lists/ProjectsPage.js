@@ -7,6 +7,7 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
     const { users } = window.useUsers();
     const { logiciels } = window.useLogiciels();
     const [showModal, setShowModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
     const [editingItem, setEditingItem] = useState(null);
     const [groupBy, setGroupBy] = useState('entreprise'); // Par défaut groupé par entreprise
     const [expandAll, setExpandAll] = useState(true);
@@ -41,6 +42,15 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
         setEditingItem(null);
         setShowModal(true);
     }, []);
+
+    const handleImport = useCallback(() => {
+        console.log('handleImport appelé !');
+        setShowImportModal(true);
+    }, []);
+
+    // Debug - vérifier si la fonction est bien définie
+    console.log('ProjectsPage - handleImport défini:', !!handleImport);
+    console.log('ProjectsPage - canAddProject:', canAddProject());
     
     const handleEdit = useCallback((item) => {
         setEditingItem(item);
@@ -149,7 +159,7 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
 
     return React.createElement('div', {}, [
         // Affichage conditionnel selon le mode
-        groupBy ? 
+        groupBy ?
             React.createElement(window.GroupedTableView, {
                 key: 'grouped-table',
                 data: projects,
@@ -158,6 +168,7 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
                 subtitle: subtitle,
                 loading: loading,
                 onAdd: canAddProject() ? handleAdd : null,
+                onImport: canAddProject() ? handleImport : null,
                 onEdit: canEditProject() ? handleEdit : null,
                 onDelete: canDeleteProject() ? handleDelete : null,
                 onRowClick: onRowClick,
@@ -175,6 +186,7 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
                 subtitle: subtitle,
                 loading: loading,
                 onAdd: canAddProject() ? handleAdd : null,
+                onImport: canAddProject() ? handleImport : null,
                 onEdit: canEditProject() ? handleEdit : null,
                 onDelete: canDeleteProject() ? handleDelete : null,
                 onRowClick: onRowClick,
@@ -183,7 +195,7 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
                 onGroupChange: setGroupBy,
                 onExpandChange: setExpandAll
             }),
-        
+
         showModal && React.createElement(window.ProjectModal, {
             key: 'modal',
             item: editingItem,
@@ -195,6 +207,16 @@ const ProjectsPage = React.memo(function ProjectsPage({ onRowClick }) {
             onClose: () => {
                 setShowModal(false);
                 setEditingItem(null);
+            }
+        }),
+
+        showImportModal && React.createElement(window.ImportProjectsModal, {
+            key: 'import-modal',
+            show: showImportModal,
+            onClose: () => {
+                setShowImportModal(false);
+                // Rafraîchir la liste des projets après import
+                window.location.reload();
             }
         })
     ]);

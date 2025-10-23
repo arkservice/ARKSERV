@@ -12,6 +12,29 @@ function useFormation() {
         return 'eval_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     };
 
+    // Nettoyer les champs UUID : convertir les chaînes vides en null
+    const cleanUuidFields = (data) => {
+        const uuidFields = [
+            'commercial_id',
+            'formateur_id',
+            'contact_id',
+            'entreprise_id',
+            'pdc_id',
+            'logiciel_id',
+            'created_by'
+        ];
+
+        const cleaned = { ...data };
+        uuidFields.forEach(field => {
+            // Ne nettoyer que les champs présents dans l'objet d'origine
+            if (field in cleaned && (cleaned[field] === '' || cleaned[field] === undefined)) {
+                cleaned[field] = null;
+            }
+        });
+
+        return cleaned;
+    };
+
     // Récupérer toutes les sessions (formations sont maintenant dans projects)
     const fetchSessions = useCallback(async () => {
         try {
@@ -102,6 +125,7 @@ function useFormation() {
                         ref,
                         pdc_number,
                         duree_en_jour,
+                        version_logiciel,
                         programme_point_1,
                         programme_point_2,
                         programme_point_3,
@@ -266,10 +290,13 @@ function useFormation() {
             // Générer un token unique pour l'évaluation
             const evaluation_token = generateToken();
 
+            // Nettoyer les champs UUID (convertir '' en null)
+            const cleanedData = cleanUuidFields(sessionData);
+
             const { data, error: insertError } = await supabase
                 .from('projects')
                 .insert({
-                    ...sessionData,
+                    ...cleanedData,
                     type: 'formation',
                     evaluation_token
                 })
@@ -290,9 +317,13 @@ function useFormation() {
     const updateSession = async (id, updates) => {
         try {
             setError(null);
+
+            // Nettoyer les champs UUID (convertir '' en null)
+            const cleanedUpdates = cleanUuidFields(updates);
+
             const { data, error: updateError } = await supabase
                 .from('projects')
-                .update(updates)
+                .update(cleanedUpdates)
                 .eq('id', id)
                 .eq('type', 'formation')
                 .select()
@@ -338,27 +369,33 @@ function useFormation() {
             // Générer un token unique pour l'évaluation
             const evaluation_token = generateToken();
 
+            // Préparer les données du projet
+            const projectData = {
+                name: formationData.nom_formation,
+                description: `Formation ${formationData.prj}`,
+                entreprise_id: formationData.entreprise_id,
+                contact_id: formationData.contact_id,
+                commercial_id: formationData.commercial_id,
+                status: 'active',
+                type: 'formation',
+                created_by: createdBy,
+                // Champs spécifiques aux formations
+                pdc_id: formationData.pdc_id,
+                formateur_id: formationData.formateur_id,
+                stagiaire_ids: formationData.stagiaire_ids || [],
+                heures_formation: formationData.heures_formation,
+                periode_souhaitee: periodeSummary,
+                prj: formationData.prj,
+                evaluation_token: evaluation_token
+            };
+
+            // Nettoyer les champs UUID (convertir '' en null)
+            const cleanedProjectData = cleanUuidFields(projectData);
+
             // 1. Créer le projet de type formation avec toutes les données
             const { data: projet, error: projetError } = await supabase
                 .from('projects')
-                .insert({
-                    name: formationData.nom_formation,
-                    description: `Formation ${formationData.prj}`,
-                    entreprise_id: formationData.entreprise_id,
-                    contact_id: formationData.contact_id,
-                    commercial_id: formationData.commercial_id,
-                    status: 'active',
-                    type: 'formation',
-                    created_by: createdBy,
-                    // Champs spécifiques aux formations
-                    pdc_id: formationData.pdc_id,
-                    formateur_id: formationData.formateur_id,
-                    stagiaire_ids: formationData.stagiaire_ids || [],
-                    heures_formation: formationData.heures_formation,
-                    periode_souhaitee: periodeSummary,
-                    prj: formationData.prj,
-                    evaluation_token: evaluation_token
-                })
+                .insert(cleanedProjectData)
                 .select()
                 .single();
 

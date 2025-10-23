@@ -490,6 +490,11 @@ function Layout() {
             key: 'realtime-status'
         }),
 
+        // Provider de toasts pour les notifications
+        React.createElement(window.ToasterProvider, {
+            key: 'toaster-provider'
+        }),
+
         // Modal des paramètres
         showSettingsModal && React.createElement(window.UserSettingsModal, {
             key: 'settings-modal',

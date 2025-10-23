@@ -30,8 +30,11 @@ function DeleteIcon({ className = "w-4 h-4" }) {
 }
 
 // Composant TableView générique style Airtable - Optimized with debounce
-function TableView({ data, columns, title, subtitle, loading, onAdd, onEdit, onDelete, onRowClick, getRowClassName, groupBy, expandAll, onGroupChange, onExpandChange, groupingOptions, customActions, onCellEdit, searchableFields }) {
+function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, onEdit, onDelete, onRowClick, getRowClassName, groupBy, expandAll, onGroupChange, onExpandChange, groupingOptions, customActions, onCellEdit, searchableFields }) {
     const { useState, useEffect, useMemo, useRef } = React;
+
+    // Debug
+    console.log('TableView - onImport reçu:', !!onImport);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -565,6 +568,12 @@ function TableView({ data, columns, title, subtitle, loading, onAdd, onEdit, onD
                             action.label
                         ]);
                     }),
+                    // Bouton Import CSV
+                    onImport && React.createElement('button', {
+                        key: 'import-btn',
+                        onClick: onImport,
+                        className: "px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    }, "📊 Import CSV"),
                     // Bouton Ajouter existant
                     onAdd && React.createElement('button', {
                         key: 'add-btn',

@@ -17,7 +17,6 @@ function EvaluationFormPage({ token }) {
         stagiaire_nom: '',
         stagiaire_prenom: '',
         stagiaire_email: '',
-        stagiaire_societe: '',
         stagiaire_fonction: '',
 
         // Section 01: Organisation
@@ -144,7 +143,7 @@ function EvaluationFormPage({ token }) {
 
     const validateForm = () => {
         // Vérifier les informations stagiaire
-        if (!formData.stagiaire_nom || !formData.stagiaire_prenom || !formData.stagiaire_email || !formData.stagiaire_societe || !formData.stagiaire_fonction) {
+        if (!formData.stagiaire_nom || !formData.stagiaire_prenom || !formData.stagiaire_email || !formData.stagiaire_fonction) {
             setError('Veuillez remplir toutes vos informations personnelles');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return false;
@@ -295,7 +294,7 @@ function EvaluationFormPage({ token }) {
             React.createElement('h2', {
                 key: 'title',
                 className: "text-2xl font-bold text-blue-900 mb-4"
-            }, session.name || 'Formation'),
+            }, `Formation ${session.pdc?.logiciel?.nom || ''} ${session.pdc?.version_logiciel || ''} - ${session.pdc?.duree_en_jour || 0} ${session.pdc?.duree_en_jour > 1 ? 'jours' : 'jour'}`.trim()),
 
             // Container avec 2 colonnes explicites
             React.createElement('div', {
@@ -342,6 +341,17 @@ function EvaluationFormPage({ token }) {
                             ? `${session.commercial.prenom} ${session.commercial.nom}`
                             : 'Non renseigné'
                         )
+                    ]),
+                    // Société
+                    React.createElement('div', { key: 'societe' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-blue-900"
+                        }, "Société : "),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-blue-800"
+                        }, session.entreprise?.nom || 'Non renseigné')
                     ])
                 ]),
                 // Colonne de droite
@@ -473,21 +483,8 @@ function EvaluationFormPage({ token }) {
                 ]),
                 React.createElement('div', {
                     key: 'row2',
-                    className: "grid grid-cols-1 md:grid-cols-2 gap-4"
+                    className: "grid grid-cols-1 gap-4"
                 }, [
-                    React.createElement('div', { key: 'societe' }, [
-                        React.createElement('label', {
-                            key: 'label',
-                            className: "block text-sm font-medium text-gray-700 mb-1"
-                        }, "Société *"),
-                        React.createElement('input', {
-                            key: 'input',
-                            type: 'text',
-                            value: formData.stagiaire_societe,
-                            onChange: (e) => handleFieldChange('stagiaire_societe', e.target.value),
-                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        })
-                    ]),
                     React.createElement('div', { key: 'fonction' }, [
                         React.createElement('label', {
                             key: 'label',

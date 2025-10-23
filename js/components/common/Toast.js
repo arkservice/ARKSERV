@@ -85,8 +85,8 @@ function Toast({ id, type = 'info', title, message, duration = 5000, onClose, ac
     
     return React.createElement('div', {
         key: id,
-        className: `transform transition-all duration-300 ease-in-out ${animationClasses} 
-                   max-w-lg w-full max-h-32 ${config.bgColor} ${config.borderColor} border rounded-lg shadow-lg pointer-events-auto`,
+        className: `transform transition-all duration-300 ease-in-out ${animationClasses}
+                   max-w-5xl w-full ${config.bgColor} ${config.borderColor} border rounded-lg shadow-lg pointer-events-auto`,
         role: 'alert',
         'aria-live': 'polite'
     }, [

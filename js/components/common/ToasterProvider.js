@@ -60,7 +60,7 @@ function ToasterProvider() {
         // Conteneur des toasts centré
         React.createElement('div', {
             key: 'toasts-container',
-            className: 'fixed top-4 left-1/2 transform -translate-x-1/2 flex flex-col space-y-2 pointer-events-none'
+            className: 'fixed top-4 left-1/2 transform -translate-x-1/2 flex flex-col space-y-2 pointer-events-none w-full max-w-5xl px-4'
         }, toasts.map(toast => 
             React.createElement(window.Toast, {
                 key: toast.id,

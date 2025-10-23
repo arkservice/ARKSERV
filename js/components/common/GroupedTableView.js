@@ -30,8 +30,12 @@ function DeleteIcon({ className = "w-4 h-4" }) {
 }
 
 // Composant GroupedTableView pour afficher les données groupées
-function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEdit, onDelete, onRowClick, getRowClassName, groupBy = 'entreprise', expandAll, statusOptions, onGroupChange, onExpandChange, entityType = 'projet', groupingOptions, customActions, customGroupOrder, getDefaultExpandState }) {
+function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onImport, onEdit, onDelete, onRowClick, getRowClassName, groupBy = 'entreprise', expandAll, statusOptions, onGroupChange, onExpandChange, entityType = 'projet', groupingOptions, customActions, customGroupOrder, getDefaultExpandState }) {
     const { useState, useEffect, useMemo } = React;
+
+    // Debug
+    console.log('GroupedTableView - onImport reçu:', !!onImport);
+    console.log('GroupedTableView - onAdd reçu:', !!onAdd);
     
     const [searchTerm, setSearchTerm] = useState('');
     const [sortKey, setSortKey] = useState('');
@@ -288,6 +292,12 @@ function GroupedTableView({ data, columns, title, subtitle, loading, onAdd, onEd
                             action.label
                         ]);
                     }),
+                    // Bouton Import Excel
+                    onImport && React.createElement('button', {
+                        key: 'import-btn',
+                        onClick: onImport,
+                        className: "px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    }, "📊 Import Excel"),
                     // Bouton Ajouter existant
                     onAdd && React.createElement('button', {
                         key: 'add-btn',

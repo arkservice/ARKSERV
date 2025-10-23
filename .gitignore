@@ -43,3 +43,9 @@ migrations/archive/
 *~
 *.bak
 *.orig
+
+# Data files
+*.csv
+*.xls
+*.xlsx
+.~lock.*

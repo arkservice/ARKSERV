@@ -8,8 +8,10 @@ function FormationPrepPage() {
     const { contacts, createContact } = window.useContacts();
     const { generateConvocation, generateConvention } = window.useDocumentGenerationService();
     const { getSessionsForProject } = window.useProjectSessions();
+    const { showSuccessToast } = window.useToaster();
 
     const [showForm, setShowForm] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
     const [showEntrepriseModal, setShowEntrepriseModal] = useState(false);
     const [showContactModal, setShowContactModal] = useState(false);
     const [showContactModalForStagiaire, setShowContactModalForStagiaire] = useState(false);
@@ -351,7 +353,7 @@ function FormationPrepPage() {
 
     const handleCopyUrl = (url) => {
         navigator.clipboard.writeText(url);
-        alert('URL copiée dans le presse-papiers !');
+        showSuccessToast('Copié !', 'Le lien a été copié dans le presse-papiers', { duration: 1000 });
     };
 
     const handleReset = () => {
@@ -514,71 +516,6 @@ function FormationPrepPage() {
     // Configuration des colonnes du tableau
     const columns = [
         {
-            key: 'status',
-            label: 'Statut',
-            sortable: true,
-            render: (value, row) => {
-                return React.createElement('select', {
-                    value: value || 'active',
-                    onChange: async (e) => {
-                        e.stopPropagation();
-                        const newStatus = e.target.value;
-
-                        try {
-                            // 1. Mettre à jour le statut en base
-                            const { data, error } = await window.supabaseConfig.client
-                                .from('projects')
-                                .update({ status: newStatus })
-                                .eq('id', row.id);
-
-                            if (error) {
-                                console.error('Erreur mise à jour statut:', error);
-                                alert('Erreur lors de la mise à jour du statut: ' + error.message);
-                                return;
-                            }
-
-                            // 2. Si le statut est "transmission", appeler l'Edge Function
-                            if (newStatus === 'transmission') {
-                                // Vérifier que les PDFs existent
-                                if (!row.pdf_convocation || !row.pdf_convention) {
-                                    alert('Les PDFs doivent être générés avant l\'envoi de l\'email');
-                                    return;
-                                }
-
-                                // Appeler l'Edge Function
-                                const { data: emailData, error: emailError } = await window.supabaseConfig.client.functions.invoke('send-formation-email', {
-                                    body: { projectId: row.id }
-                                });
-
-                                if (emailError) {
-                                    console.error('Erreur envoi email:', emailError);
-                                    alert('Statut mis à jour, mais erreur lors de l\'envoi de l\'email: ' + emailError.message);
-                                } else {
-                                    alert('Statut mis à jour et email envoyé avec succès !');
-                                }
-                            } else {
-                                alert('Statut mis à jour avec succès !');
-                            }
-
-                            // 3. Rafraîchir le tableau
-                            await fetchSessions();
-
-                        } catch (err) {
-                            console.error('Erreur:', err);
-                            alert('Erreur: ' + err.message);
-                        }
-                    },
-                    onClick: (e) => e.stopPropagation(),
-                    className: 'px-2 py-1 text-sm border border-gray-300 rounded'
-                }, [
-                    React.createElement('option', { key: 'active', value: 'active' }, 'Active'),
-                    React.createElement('option', { key: 'completed', value: 'completed' }, 'Terminée'),
-                    React.createElement('option', { key: 'paused', value: 'paused' }, 'En pause'),
-                    React.createElement('option', { key: 'transmission', value: 'transmission' }, 'Transmission')
-                ]);
-            }
-        },
-        {
             key: 'prj',
             label: 'PRJ',
             sortable: true,
@@ -593,17 +530,6 @@ function FormationPrepPage() {
             render: (value, row) => React.createElement('span', {
                 className: 'text-sm text-gray-700'
             }, value?.nom || 'N/A')
-        },
-        {
-            key: 'stagiaire_ids',
-            label: 'Stagiaires',
-            sortable: false,
-            render: (value, row) => {
-                const count = value?.length || 0;
-                return React.createElement('span', {
-                    className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800'
-                }, count);
-            }
         },
         {
             key: 'date_debut',
@@ -627,7 +553,14 @@ function FormationPrepPage() {
             key: 'pdc',
             label: 'Plan de cours',
             sortable: true,
-            render: (value, row) => value?.pdc_number || 'N/A'
+            render: (value, row) => {
+                if (!value || !value.pdc_number) {
+                    return React.createElement('span', {
+                        className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800'
+                    }, 'N/A');
+                }
+                return value.pdc_number;
+            }
         },
         {
             key: 'formateur',
@@ -685,11 +618,21 @@ function FormationPrepPage() {
         },
         {
             key: 'evaluation_token',
-            label: 'Eval',
+            label: 'Lien éval',
             render: (value, row) => {
+                // Pas de bouton si pas de PDC
+                if (!row.pdc) {
+                    return React.createElement('span', {
+                        className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800'
+                    }, 'manque pdc');
+                }
+
                 const url = generateEvaluationUrl(value);
                 return React.createElement('button', {
-                    onClick: () => handleCopyUrl(url),
+                    onClick: (e) => {
+                        e.stopPropagation();
+                        handleCopyUrl(url);
+                    },
                     className: 'inline-flex items-center gap-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors'
                 }, [
                     React.createElement('i', {
@@ -701,42 +644,6 @@ function FormationPrepPage() {
                         key: 'text'
                     }, 'Copier')
                 ]);
-            }
-        },
-        {
-            key: 'pdf_convention',
-            label: 'Convention',
-            render: (value, row) => {
-                if (!value) return '-';
-                return React.createElement('a', {
-                    href: value,
-                    download: `convention_${row.prj}.pdf`,
-                    target: '_blank',
-                    title: 'Télécharger la convention',
-                    className: 'inline-flex items-center justify-center p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded transition-colors',
-                    onClick: (e) => e.stopPropagation()
-                }, React.createElement('i', {
-                    'data-lucide': 'download',
-                    className: 'w-4 h-4'
-                }));
-            }
-        },
-        {
-            key: 'pdf_convocation',
-            label: 'Convocation',
-            render: (value, row) => {
-                if (!value) return '-';
-                return React.createElement('a', {
-                    href: value,
-                    download: `convocation_${row.prj}.pdf`,
-                    target: '_blank',
-                    title: 'Télécharger la convocation',
-                    className: 'inline-flex items-center justify-center p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors',
-                    onClick: (e) => e.stopPropagation()
-                }, React.createElement('i', {
-                    'data-lucide': 'download',
-                    className: 'w-4 h-4'
-                }));
             }
         }
     ];
@@ -1246,19 +1153,33 @@ function FormationPrepPage() {
     }
 
     // Vue tableau
-    return React.createElement(window.TableView, {
-        data: sessions,
-        columns: columns,
-        title: "Formations (PRJ)",
-        subtitle: "Liste de toutes les formations avec liens d'évaluation",
-        loading: loading,
-        onAdd: () => setShowForm(true),
-        onDelete: handleDelete,
-        onRowClick: (row) => {
-            setEditingFormationId(row.id);
-        },
-        searchableFields: ['prj', 'pdc.ref', 'formateur.nom', 'formateur.prenom', 'commercial.nom', 'commercial.prenom']
-    });
+    return React.createElement('div', {}, [
+        React.createElement(window.TableView, {
+            key: 'table',
+            data: sessions,
+            columns: columns,
+            title: "Formations (PRJ)",
+            subtitle: "Liste de toutes les formations avec liens d'évaluation",
+            loading: loading,
+            onAdd: () => setShowForm(true),
+            onImport: () => setShowImportModal(true),
+            onDelete: handleDelete,
+            onRowClick: (row) => {
+                setEditingFormationId(row.id);
+            },
+            searchableFields: ['prj', 'pdc.ref', 'formateur.nom', 'formateur.prenom', 'commercial.nom', 'commercial.prenom']
+        }),
+
+        showImportModal && React.createElement(window.ImportProjectsModal, {
+            key: 'import-modal',
+            show: showImportModal,
+            onClose: () => {
+                setShowImportModal(false);
+                // Rafraîchir la liste après import
+                fetchSessions();
+            }
+        })
+    ]);
 }
 
 // Export global
