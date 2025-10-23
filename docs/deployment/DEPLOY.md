@@ -1,18 +1,33 @@
 # Guide de déploiement ARK SERVICE
 
-## Déploiement en une commande
+## Déploiement en deux commandes
 
-Pour déployer le site complet sur le serveur de production :
+### 1. Préparation du déploiement
+
+Pour préparer les fichiers à déployer :
+
+```powershell
+.\scripts\deploy-prepare.ps1
+```
+
+Ce script s'occupe de :
+1. ✅ Créer/nettoyer le dossier `deploy/`
+2. ✅ Copier `index.html`, `css/`, et `js/` (avec tous les sous-dossiers)
+3. ✅ Afficher le résumé des fichiers préparés (~144 fichiers)
+
+### 2. Upload vers le serveur FTP
+
+Pour déployer sur le serveur de production :
 
 ```powershell
 .\scripts\deploy-ftp.ps1
 ```
 
-**C'est tout !** Le script s'occupe de :
-1. ✅ Créer/nettoyer le dossier `deploy/`
-2. ✅ Copier `index.html`, `css/`, et `js/` (avec tous les sous-dossiers)
-3. ✅ Upload vers le serveur FTP
-4. ✅ Afficher la progression et le résumé
+Ce script s'occupe de :
+1. ✅ Upload tous les fichiers du dossier `deploy/` vers le serveur FTP
+2. ✅ Créer automatiquement la structure de dossiers
+3. ✅ Afficher la progression fichier par fichier
+4. ✅ Afficher le résumé du déploiement
 
 ---
 
@@ -95,10 +110,11 @@ Vérifiez votre connexion internet et les identifiants FTP.
 ## Workflow recommandé
 
 1. **Développement local** : Testez vos modifications
-2. **Déploiement** : `.\scripts\deploy-ftp.ps1`
-3. **Vérification** : `.\scripts\check-deploy.ps1` (optionnel)
-4. **Test production** : Visitez https://arkance-training.world
-5. **Commit Git** : Sauvegardez vos changements
+2. **Préparation** : `.\scripts\deploy-prepare.ps1`
+3. **Déploiement** : `.\scripts\deploy-ftp.ps1`
+4. **Vérification** : `.\scripts\check-deploy.ps1` (optionnel)
+5. **Test production** : Visitez https://arkance-training.world
+6. **Commit Git** : Sauvegardez vos changements
 
 ---
 

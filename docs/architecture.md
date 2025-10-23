@@ -19,8 +19,8 @@ ARK_SERVICE/
 │   └── CLAUDE_INSTRUCTIONS.md     # Instructions pour Claude Code
 │
 ├── scripts/                       # Scripts de déploiement
-│   ├── deploy-ftp.ps1             # Déploiement FTP
-│   ├── deploy-quick.ps1           # Déploiement rapide
+│   ├── deploy-prepare.ps1         # Préparation du déploiement
+│   ├── deploy-ftp.ps1             # Upload FTP
 │   └── check-deploy.ps1           # Vérification du déploiement
 │
 ├── supabase/                      # Configuration Supabase
@@ -312,13 +312,13 @@ Voir `docs/deployment/DEPLOY.md` pour les instructions complètes.
 
 **Commandes rapides:**
 ```bash
-# Déploiement rapide
-.\scripts\deploy-quick.ps1
+# 1. Préparation des fichiers
+.\scripts\deploy-prepare.ps1
 
-# Déploiement FTP complet
+# 2. Upload FTP
 .\scripts\deploy-ftp.ps1
 
-# Vérification
+# 3. Vérification (optionnel)
 .\scripts\check-deploy.ps1
 ```
 
