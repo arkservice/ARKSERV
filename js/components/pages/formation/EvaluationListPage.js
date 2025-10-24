@@ -515,6 +515,7 @@ function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh,
     });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState(null);
+    const [progressMessage, setProgressMessage] = useState('');
 
     const handleFormateurNoteChange = (themeKey, note) => {
         setFormateurThemes(prev => ({
@@ -530,6 +531,7 @@ function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh,
         try {
             setIsSaving(true);
             setSaveError(null);
+            setProgressMessage('');
 
             // Vérifier que toutes les notes sont remplies
             const allFilled = themeKeys.every(key => formateurThemes[key]?.note !== null);
@@ -544,6 +546,8 @@ function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh,
             }
 
             // 1. Sauvegarder l'évaluation formateur (statut passe à "Traitée")
+            setProgressMessage('💾 Enregistrement de l\'évaluation...');
+            if (window.lucide) window.lucide.createIcons(); // Rafraîchir les icônes
             await updateFormateurQualiopi(
                 evaluation.id,
                 formateurThemes,
@@ -558,77 +562,111 @@ function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh,
                 await onRefresh(evaluation.id);
             }
 
-            // 3. Générer automatiquement le PDF Qualiopi
-            if (!window.generateQualiopiPDF) {
-                throw new Error('Générateur PDF non disponible');
+            // 3. Générer automatiquement les 2 PDFs (Qualiopi + Diplôme)
+            if (!window.generateQualiopiPDF || !window.generateDiplomeFormationPDF) {
+                throw new Error('Générateurs PDF non disponibles');
             }
 
-            console.log('📄 Génération automatique du PDF Qualiopi...');
+            console.log('📄 Génération automatique des PDFs Qualiopi et Diplôme...');
 
-            // Charger le template
-            const template = await loadTemplateByType('qualiopi');
-            const sections = await loadSectionsByType('qualiopi');
-            const pdfParams = template ? convertTemplateToParams(template, sections) : {};
+            // === GÉNÉRATION PDF QUALIOPI ===
+            setProgressMessage('📄 Génération du PDF Qualiopi...');
+            if (window.lucide) window.lucide.createIcons(); // Rafraîchir les icônes
+            const templateQualiopi = await loadTemplateByType('qualiopi');
+            const sectionsQualiopi = await loadSectionsByType('qualiopi');
+            const pdfParamsQualiopi = templateQualiopi ? convertTemplateToParams(templateQualiopi, sectionsQualiopi) : {};
 
-            // Générer le PDF avec les données mises à jour (incluant l'évaluation formateur)
             const updatedEval = { ...evaluation, qualiopi_formateur_themes: formateurThemes, statut: 'Traitée' };
-            const pdfBlob = await window.generateQualiopiPDF(updatedEval, pdfParams);
+            const pdfQualiopiBlob = await window.generateQualiopiPDF(updatedEval, pdfParamsQualiopi);
 
-            console.log('✅ PDF généré');
+            console.log('✅ PDF Qualiopi généré');
 
-            // 4. Uploader le PDF vers Supabase Storage
-            const fileName = `qualiopi_${evaluation.stagiaire_nom}_${evaluation.stagiaire_prenom}_${evaluation.formation.prj}_${Date.now()}.pdf`;
-            const filePath = `qualiopi/${fileName}`;
+            // === GÉNÉRATION PDF DIPLÔME ===
+            setProgressMessage('📄 Génération du PDF Diplôme...');
+            if (window.lucide) window.lucide.createIcons(); // Rafraîchir les icônes
+            const templateDiplome = await loadTemplateByType('diplome');
+            const sectionsDiplome = await loadSectionsByType('diplome');
+            const pdfParamsDiplome = templateDiplome ? convertTemplateToParams(templateDiplome, sectionsDiplome) : {};
 
-            const { error: uploadError } = await supabase.storage
+            const diplomeData = await window.getDiplomeDataFromEvaluation(updatedEval, supabase);
+            const pdfDiplomeBlob = await window.generateDiplomeFormationPDF(diplomeData, pdfParamsDiplome);
+
+            console.log('✅ PDF Diplôme généré');
+
+            // 4. Uploader les 2 PDFs vers Supabase Storage
+            setProgressMessage('📤 Upload des PDFs vers le stockage...');
+            if (window.lucide) window.lucide.createIcons(); // Rafraîchir les icônes
+            const timestamp = Date.now();
+
+            // Upload PDF Qualiopi
+            const fileNameQualiopi = `qualiopi_${evaluation.stagiaire_nom}_${evaluation.stagiaire_prenom}_${evaluation.formation.prj}_${timestamp}.pdf`;
+            const filePathQualiopi = `qualiopi/${fileNameQualiopi}`;
+
+            const { error: uploadErrorQualiopi } = await supabase.storage
                 .from('pdfs')
-                .upload(filePath, pdfBlob, {
+                .upload(filePathQualiopi, pdfQualiopiBlob, {
                     contentType: 'application/pdf',
                     upsert: false
                 });
 
-            if (uploadError) {
-                throw new Error(`Erreur upload PDF: ${uploadError.message}`);
+            if (uploadErrorQualiopi) {
+                throw new Error(`Erreur upload PDF Qualiopi: ${uploadErrorQualiopi.message}`);
             }
 
-            // 5. Récupérer l'URL publique
-            const { data: urlData } = supabase.storage
+            const { data: urlDataQualiopi } = supabase.storage
                 .from('pdfs')
-                .getPublicUrl(filePath);
+                .getPublicUrl(filePathQualiopi);
 
-            console.log('✅ PDF uploadé:', urlData.publicUrl);
+            console.log('✅ PDF Qualiopi uploadé:', urlDataQualiopi.publicUrl);
 
-            // 6. Mettre à jour l'évaluation avec l'URL du PDF
+            // Upload PDF Diplôme
+            const fileNameDiplome = `diplome_${evaluation.stagiaire_nom}_${evaluation.stagiaire_prenom}_${evaluation.formation.prj}_${timestamp}.pdf`;
+            const filePathDiplome = `diplome/${fileNameDiplome}`;
+
+            const { error: uploadErrorDiplome } = await supabase.storage
+                .from('pdfs')
+                .upload(filePathDiplome, pdfDiplomeBlob, {
+                    contentType: 'application/pdf',
+                    upsert: false
+                });
+
+            if (uploadErrorDiplome) {
+                throw new Error(`Erreur upload PDF Diplôme: ${uploadErrorDiplome.message}`);
+            }
+
+            const { data: urlDataDiplome } = supabase.storage
+                .from('pdfs')
+                .getPublicUrl(filePathDiplome);
+
+            console.log('✅ PDF Diplôme uploadé:', urlDataDiplome.publicUrl);
+
+            // 6. Mettre à jour l'évaluation avec les 2 URLs
             const { error: updateError } = await supabase
                 .from('evaluation')
-                .update({ pdf_qualiopi_url: urlData.publicUrl })
+                .update({
+                    pdf_qualiopi_url: urlDataQualiopi.publicUrl,
+                    pdf_diplome_url: urlDataDiplome.publicUrl
+                })
                 .eq('id', evaluation.id);
 
             if (updateError) {
-                throw new Error(`Erreur mise à jour PDF: ${updateError.message}`);
+                throw new Error(`Erreur mise à jour PDFs: ${updateError.message}`);
             }
 
-            console.log('✅ PDF enregistré');
+            console.log('✅ Les 2 PDFs enregistrés');
 
-            // 7. Appeler l'Edge Function pour envoyer l'email (comme send-formation-email)
-            const { data: emailData, error: emailError } = await supabase.functions.invoke(
-                'send-evaluation-email',
-                { body: { evaluationId: evaluation.id } }
-            );
+            // 7. L'email sera envoyé automatiquement par le trigger database
+            setProgressMessage('✅ Terminé !');
+            if (window.lucide) window.lucide.createIcons(); // Rafraîchir les icônes
 
-            if (emailError) {
-                console.warn('⚠️ Erreur envoi email:', emailError);
-                throw new Error(`Erreur envoi email: ${emailError.message}`);
-            }
-
-            console.log('✅ Email envoyé:', emailData);
-
-            alert('Évaluation formateur enregistrée avec succès ! Un email a été envoyé au stagiaire avec le PDF Qualiopi.');
+            alert('Évaluation formateur enregistrée avec succès ! Un email sera envoyé automatiquement au stagiaire avec les PDFs (Qualiopi + Diplôme).');
         } catch (err) {
             console.error('Erreur lors de la sauvegarde:', err);
             setSaveError(err.message || 'Erreur lors de la sauvegarde');
+            setProgressMessage('');
         } finally {
             setIsSaving(false);
+            setProgressMessage('');
         }
     };
 
@@ -791,7 +829,7 @@ function QualiopiSection({ evaluation, auth, updateFormateurQualiopi, onRefresh,
                 'data-lucide': isSaving ? 'loader-2' : 'save',
                 className: `w-5 h-5 ${isSaving ? 'animate-spin' : ''}`
             }),
-            isSaving ? "Enregistrement..." : "Enregistrer l'évaluation formateur"
+            isSaving ? (progressMessage || "Enregistrement...") : "Enregistrer l'évaluation formateur"
         ])),
 
         // Message si pas formateur
