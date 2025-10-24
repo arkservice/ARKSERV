@@ -3,6 +3,7 @@ function EvaluationFormPage({ token }) {
     const { useState, useEffect } = React;
     const { getSessionByToken } = window.useFormation();
     const { createEvaluation } = window.useEvaluation();
+    const { agences } = window.useAgences();
     const supabase = window.supabaseConfig.client;
 
     const [session, setSession] = useState(null);
@@ -155,6 +156,111 @@ function EvaluationFormPage({ token }) {
             setError('Veuillez saisir une adresse email valide');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return false;
+        }
+
+        // Section 01 - Organisation (4 questions obligatoires)
+        const orgFields = [
+            'org_communication_objectifs',
+            'org_duree_formation',
+            'org_composition_groupe',
+            'org_respect_engagements'
+        ];
+        const missingOrg = orgFields.some(field => formData[field] === null);
+        if (missingOrg) {
+            setError('Section Organisation : toutes les questions avec notes sont obligatoires');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Section 02 - Moyens (validation conditionnelle selon le type de session)
+        // Déterminer quelles questions devraient être affichées
+        const hasNosLocaux = session?.sessions?.some(s => s.lieu_deroulement === 'Dans nos locaux') || false;
+        const hasDistance = session?.sessions?.some(s => s.lieu_deroulement === 'À distance') || false;
+
+        // Support de cours : TOUJOURS obligatoire
+        if (formData.moyens_support_cours === null) {
+            setError('Section Moyens pédagogiques et techniques : veuillez noter les supports de cours');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Évaluation des locaux : obligatoire SI "Dans nos locaux"
+        if (hasNosLocaux && formData.moyens_evaluation_locaux === null) {
+            setError('Section Moyens pédagogiques et techniques : veuillez noter l\'évaluation des locaux');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Matériel informatique : obligatoire SI "Dans nos locaux"
+        if (hasNosLocaux && formData.moyens_materiel_informatique === null) {
+            setError('Section Moyens pédagogiques et techniques : veuillez noter le matériel informatique');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Formation à distance : obligatoire SI "À distance"
+        if (hasDistance && formData.moyens_formation_distance === null) {
+            setError('Section Moyens pédagogiques et techniques : veuillez noter la formation à distance');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Vérifier "Où avez-vous mangé ?" si "Dans nos locaux"
+        if (hasNosLocaux && (!formData.moyens_lieu_repas || formData.moyens_lieu_repas === '')) {
+            setError('Section Moyens pédagogiques et techniques : veuillez indiquer où vous avez mangé');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Vérifier question conditionnelle "La restauration" si affichée
+        if (formData.moyens_lieu_repas === 'Restauration prise en charge par Arkance' && formData.moyens_restauration === null) {
+            setError('Section Moyens pédagogiques et techniques : veuillez noter la qualité de la restauration');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Section 03 - Pédagogie (8 questions obligatoires)
+        const pedaFields = [
+            'peda_niveau_difficulte',
+            'peda_rythme_progression',
+            'peda_qualite_contenu_theorique',
+            'peda_qualite_contenu_pratique',
+            'peda_connaissance_formateur',
+            'peda_approche_pedagogique',
+            'peda_ecoute_disponibilite',
+            'peda_animation_formateur'
+        ];
+        const missingPeda = pedaFields.some(field => formData[field] === null);
+        if (missingPeda) {
+            setError('Section Pédagogie : toutes les questions avec notes sont obligatoires');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Section 04 - Satisfaction (5 questions obligatoires)
+        const satisfFields = [
+            'satisf_repondu_attentes',
+            'satisf_atteint_objectifs',
+            'satisf_adequation_metier',
+            'satisf_recommandation',
+            'satisf_niveau_global'
+        ];
+        const missingSatisf = satisfFields.some(field => formData[field] === null);
+        if (missingSatisf) {
+            setError('Section Satisfaction globale : toutes les questions avec notes sont obligatoires');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+
+        // Section Qualiopi - Vérifier avant/après pour chaque thème
+        const themes = Object.values(formData.qualiopi_themes);
+        if (themes.length > 0) {
+            const missingQualiopi = themes.some(theme => theme.avant === null || theme.apres === null);
+            if (missingQualiopi) {
+                setError('Section Auto-évaluation Qualiopi : toutes les évaluations avant/après sont obligatoires');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return false;
+            }
         }
 
         return true;
@@ -387,17 +493,34 @@ function EvaluationFormPage({ token }) {
                                 React.createElement('span', {
                                     key: 'value',
                                     className: "text-blue-800"
-                                }, session.sessions_evenements.length > 1
-                                    ? `Session 1 : ${session.sessions_evenements[0].lieu}${session.sessions_evenements[0].adresse ? ` - ${session.sessions_evenements[0].adresse}` : ''}`
-                                    : `${session.sessions_evenements[0].lieu}${session.sessions_evenements[0].adresse ? ` - ${session.sessions_evenements[0].adresse}` : ''}`)
+                                }, (() => {
+                                    const evt = session.sessions_evenements[0];
+                                    const formatLieu = (ev) => {
+                                        if (ev.lieu === 'Dans nos locaux' && ev.agence_id) {
+                                            const agence = agences.find(a => a.id === ev.agence_id);
+                                            return agence ? `${ev.lieu} - ${agence.nom}` : ev.lieu + (ev.adresse ? ` - ${ev.adresse}` : '');
+                                        }
+                                        return ev.lieu + (ev.adresse ? ` - ${ev.adresse}` : '');
+                                    };
+                                    return session.sessions_evenements.length > 1
+                                        ? `Session 1 : ${formatLieu(evt)}`
+                                        : formatLieu(evt);
+                                })())
                             ]),
                             // Sessions suivantes (si plusieurs)
-                            ...session.sessions_evenements.slice(1).map((evt, index) =>
-                                React.createElement('div', {
+                            ...session.sessions_evenements.slice(1).map((evt, index) => {
+                                const formatLieu = (ev) => {
+                                    if (ev.lieu === 'Dans nos locaux' && ev.agence_id) {
+                                        const agence = agences.find(a => a.id === ev.agence_id);
+                                        return agence ? `${ev.lieu} - ${agence.nom}` : ev.lieu + (ev.adresse ? ` - ${ev.adresse}` : '');
+                                    }
+                                    return ev.lieu + (ev.adresse ? ` - ${ev.adresse}` : '');
+                                };
+                                return React.createElement('div', {
                                     key: `session-${index + 1}`,
                                     className: "text-blue-800"
-                                }, `\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0• Session ${index + 2} : ${evt.lieu}${evt.adresse ? ` - ${evt.adresse}` : ''}`)
-                            )
+                                }, `\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0• Session ${index + 2} : ${formatLieu(evt)}`);
+                            })
                         ])
                         : React.createElement('div', {
                             key: 'lieu-section',
@@ -560,22 +683,26 @@ function createSection01(formData, handleFieldChange) {
             createRatingQuestion(
                 'Communication des objectifs et du programme avant la formation',
                 formData.org_communication_objectifs,
-                (value) => handleFieldChange('org_communication_objectifs', value)
+                (value) => handleFieldChange('org_communication_objectifs', value),
+                true
             ),
             createRatingQuestion(
                 'Durée de la formation',
                 formData.org_duree_formation,
-                (value) => handleFieldChange('org_duree_formation', value)
+                (value) => handleFieldChange('org_duree_formation', value),
+                true
             ),
             createRatingQuestion(
                 'Composition du groupe (nombre, niveaux)',
                 formData.org_composition_groupe,
-                (value) => handleFieldChange('org_composition_groupe', value)
+                (value) => handleFieldChange('org_composition_groupe', value),
+                true
             ),
             createRatingQuestion(
                 'Respect des engagements',
                 formData.org_respect_engagements,
-                (value) => handleFieldChange('org_respect_engagements', value)
+                (value) => handleFieldChange('org_respect_engagements', value),
+                true
             ),
             React.createElement('div', { key: 'comments' }, [
                 React.createElement('label', {
@@ -620,32 +747,42 @@ function createSection02(formData, handleFieldChange, session) {
         showLocaux && createRatingQuestion(
             'Évaluation des locaux',
             formData.moyens_evaluation_locaux,
-            (value) => handleFieldChange('moyens_evaluation_locaux', value)
+            (value) => handleFieldChange('moyens_evaluation_locaux', value),
+            true
         ),
         // Matériel informatique (uniquement si "Dans nos locaux")
         showMateriel && createRatingQuestion(
             'Le matériel informatique',
             formData.moyens_materiel_informatique,
-            (value) => handleFieldChange('moyens_materiel_informatique', value)
+            (value) => handleFieldChange('moyens_materiel_informatique', value),
+            true
         ),
         // Formation à distance (uniquement si à distance)
         showFormationDistance && createRatingQuestion(
             'La formation à distance',
             formData.moyens_formation_distance,
-            (value) => handleFieldChange('moyens_formation_distance', value)
+            (value) => handleFieldChange('moyens_formation_distance', value),
+            true
         ),
         // Support de cours (toujours affiché)
         createRatingQuestion(
             'Le support de cours',
             formData.moyens_support_cours,
-            (value) => handleFieldChange('moyens_support_cours', value)
+            (value) => handleFieldChange('moyens_support_cours', value),
+            true
         ),
         // Questions repas (uniquement si "Dans nos locaux")
         showRepas && React.createElement('div', { key: 'repas' }, [
             React.createElement('label', {
                 key: 'label',
                 className: "block text-lg font-medium text-gray-700 mb-2"
-            }, "Où avez-vous mangé ?"),
+            }, [
+                "Où avez-vous mangé ?",
+                React.createElement('span', {
+                    key: 'asterisk',
+                    className: "text-red-600 ml-1"
+                }, '*')
+            ]),
             React.createElement('select', {
                 key: 'select',
                 value: formData.moyens_lieu_repas,
@@ -660,7 +797,8 @@ function createSection02(formData, handleFieldChange, session) {
         (showRepas && formData.moyens_lieu_repas === 'Restauration prise en charge par Arkance') && createRatingQuestion(
             'La restauration',
             formData.moyens_restauration,
-            (value) => handleFieldChange('moyens_restauration', value)
+            (value) => handleFieldChange('moyens_restauration', value),
+            true
         )
     ].filter(Boolean); // Filtrer les éléments false
 
@@ -698,42 +836,50 @@ function createSection03(formData, handleFieldChange) {
             createRatingQuestion(
                 'Niveau de difficulté',
                 formData.peda_niveau_difficulte,
-                (value) => handleFieldChange('peda_niveau_difficulte', value)
+                (value) => handleFieldChange('peda_niveau_difficulte', value),
+                true
             ),
             createRatingQuestion(
                 'Rythme de la progression',
                 formData.peda_rythme_progression,
-                (value) => handleFieldChange('peda_rythme_progression', value)
+                (value) => handleFieldChange('peda_rythme_progression', value),
+                true
             ),
             createRatingQuestion(
                 'Qualité du contenu théorique',
                 formData.peda_qualite_contenu_theorique,
-                (value) => handleFieldChange('peda_qualite_contenu_theorique', value)
+                (value) => handleFieldChange('peda_qualite_contenu_theorique', value),
+                true
             ),
             createRatingQuestion(
                 'Qualité du contenu pratique (exercices, cas d\'usages, etc)',
                 formData.peda_qualite_contenu_pratique,
-                (value) => handleFieldChange('peda_qualite_contenu_pratique', value)
+                (value) => handleFieldChange('peda_qualite_contenu_pratique', value),
+                true
             ),
             createRatingQuestion(
                 'Connaissance du formateur de votre métier',
                 formData.peda_connaissance_formateur,
-                (value) => handleFieldChange('peda_connaissance_formateur', value)
+                (value) => handleFieldChange('peda_connaissance_formateur', value),
+                true
             ),
             createRatingQuestion(
                 'Qualité de l\'approche pédagogique du formateur',
                 formData.peda_approche_pedagogique,
-                (value) => handleFieldChange('peda_approche_pedagogique', value)
+                (value) => handleFieldChange('peda_approche_pedagogique', value),
+                true
             ),
             createRatingQuestion(
                 'Écoute et disponibilité du formateur',
                 formData.peda_ecoute_disponibilite,
-                (value) => handleFieldChange('peda_ecoute_disponibilite', value)
+                (value) => handleFieldChange('peda_ecoute_disponibilite', value),
+                true
             ),
             createRatingQuestion(
                 'Animation du formateur',
                 formData.peda_animation_formateur,
-                (value) => handleFieldChange('peda_animation_formateur', value)
+                (value) => handleFieldChange('peda_animation_formateur', value),
+                true
             ),
             React.createElement('div', { key: 'comments' }, [
                 React.createElement('label', {
@@ -770,27 +916,32 @@ function createSection04(formData, handleFieldChange) {
             createRatingQuestion(
                 'La formation a-t-elle répondu à vos attentes initiales ?',
                 formData.satisf_repondu_attentes,
-                (value) => handleFieldChange('satisf_repondu_attentes', value)
+                (value) => handleFieldChange('satisf_repondu_attentes', value),
+                true
             ),
             createRatingQuestion(
                 'Pensez-vous avoir atteint les objectifs pédagogiques prévus lors de la formation ?',
                 formData.satisf_atteint_objectifs,
-                (value) => handleFieldChange('satisf_atteint_objectifs', value)
+                (value) => handleFieldChange('satisf_atteint_objectifs', value),
+                true
             ),
             createRatingQuestion(
                 'Estimez-vous que la formation était en adéquation avec le métier ?',
                 formData.satisf_adequation_metier,
-                (value) => handleFieldChange('satisf_adequation_metier', value)
+                (value) => handleFieldChange('satisf_adequation_metier', value),
+                true
             ),
             createRatingQuestion(
                 'Recommanderiez-vous notre service à un collègue ?',
                 formData.satisf_recommandation,
-                (value) => handleFieldChange('satisf_recommandation', value)
+                (value) => handleFieldChange('satisf_recommandation', value),
+                true
             ),
             createRatingQuestion(
                 'Quel est votre niveau de satisfaction globale ?',
                 formData.satisf_niveau_global,
-                (value) => handleFieldChange('satisf_niveau_global', value)
+                (value) => handleFieldChange('satisf_niveau_global', value),
+                true
             ),
             React.createElement('div', { key: 'comments' }, [
                 React.createElement('label', {
@@ -942,7 +1093,13 @@ function createSectionQualiopi(formData, handleQualiopiChange) {
                         React.createElement('label', {
                             key: 'label',
                             className: "block text-sm font-medium text-gray-700 mb-2"
-                        }, "Auto-Évaluation entrée"),
+                        }, [
+                            "Auto-Évaluation entrée",
+                            React.createElement('span', {
+                                key: 'asterisk',
+                                className: "text-red-600 ml-1"
+                            }, '*')
+                        ]),
                         React.createElement(window.QualiopiRating, {
                             value: theme.avant,
                             onChange: (value) => handleQualiopiChange(themeKey, 'avant', value),
@@ -953,7 +1110,13 @@ function createSectionQualiopi(formData, handleQualiopiChange) {
                         React.createElement('label', {
                             key: 'label',
                             className: "block text-sm font-medium text-gray-700 mb-2"
-                        }, "Auto-Évaluation sortie"),
+                        }, [
+                            "Auto-Évaluation sortie",
+                            React.createElement('span', {
+                                key: 'asterisk',
+                                className: "text-red-600 ml-1"
+                            }, '*')
+                        ]),
                         React.createElement(window.QualiopiRating, {
                             value: theme.apres,
                             onChange: (value) => handleQualiopiChange(themeKey, 'apres', value),
@@ -967,14 +1130,20 @@ function createSectionQualiopi(formData, handleQualiopiChange) {
 }
 
 // Fonction helper pour créer une question avec rating
-function createRatingQuestion(label, value, onChange) {
+function createRatingQuestion(label, value, onChange, required = false) {
     return React.createElement('div', {
         className: "space-y-3"
     }, [
         React.createElement('label', {
             key: 'label',
             className: "block text-lg font-medium text-gray-700"
-        }, label),
+        }, [
+            label,
+            required && React.createElement('span', {
+                key: 'asterisk',
+                className: "text-red-600 ml-1"
+            }, '*')
+        ]),
         React.createElement(window.StarRating, {
             key: 'rating',
             value: value,
