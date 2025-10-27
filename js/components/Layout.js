@@ -444,18 +444,7 @@ function Layout() {
             case 'formulaire-eval':
                 return React.createElement(window.EvaluationFormPreview);
             case 'rapports':
-                return React.createElement('div', {
-                    className: "bg-white rounded-lg border border-gray-200 p-8"
-                }, [
-                    React.createElement('h1', {
-                        key: 'title',
-                        className: "text-2xl font-bold text-gray-900 mb-4"
-                    }, activeSection.charAt(0).toUpperCase() + activeSection.slice(1)),
-                    React.createElement('p', {
-                        key: 'content',
-                        className: "text-gray-600"
-                    }, "Page en développement...")
-                ]);
+                return React.createElement(window.RapportsPage);
             default:
                 return React.createElement(window.EntreprisesPage);
         }

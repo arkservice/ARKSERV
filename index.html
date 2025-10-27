@@ -13,9 +13,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Allura&family=Sacramento&family=Pacifico&display=swap" rel="stylesheet">
     
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
-    
+    <!-- Lucide Icons CDN (version fixe pour stabilité) -->
+    <script src="https://unpkg.com/lucide@0.400.0/dist/umd/lucide.js"></script>
+
+    <!-- Lucide Helper (pour chargement sécurisé) -->
+    <script src="js/utils/lucideHelper.js"></script>
+
     <!-- React CDN -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -66,6 +69,7 @@
     <script src="js/utils/pdf/pdfEmargement.js"></script>
     <script src="js/utils/pdf/pdfQualiopi.js"></script>
     <script src="js/utils/pdf/pdfDiplome.js"></script>
+    <script src="js/utils/pdf/pdfDiplomeFormation.js"></script>
     <script src="js/utils/pdfSigner.js"></script>
     <script src="js/utils/taskWorkflowUtils.js"></script>
     <script src="js/utils/signatureUtils.js"></script>
@@ -111,6 +115,7 @@
     <script src="js/hooks/formations/useEvaluation.js"></script>
     <script src="js/hooks/formations/useFormateurs.js"></script>
     <script src="js/hooks/formations/useProjectSessions.js"></script>
+    <script src="js/hooks/formations/useRapportsStats.js"></script>
     
     <!-- Task Workflow Hooks and Services -->
     <script src="js/hooks/projects/useTaskWorkflow.js"></script>
@@ -158,6 +163,13 @@
     <script src="js/components/common/CollapsibleTaskSection.js"></script>
     <script src="js/components/common/CollaboratorsSection.js"></script>
 
+    <!-- Rapports Components -->
+    <script src="js/components/rapports/StatCard.js"></script>
+    <script src="js/components/rapports/FormateursTable.js"></script>
+    <script src="js/components/rapports/PDCTable.js"></script>
+    <script src="js/components/rapports/EntreprisesTable.js"></script>
+    <script src="js/components/rapports/FiltersPanel.js"></script>
+
     <!-- Generic Page Components (used by multiple pages) -->
     <script src="js/components/pages/SimpleCRUDPage.js"></script>
 
@@ -166,7 +178,9 @@
 
     <!-- Utilitaires et Services pour l'import CSV -->
     <script src="js/utils/csvParser.js"></script>
+    <script src="js/utils/csvEvaluationParser.js"></script>
     <script src="js/services/projectImportService.js"></script>
+    <script src="js/services/evaluationImportService.js"></script>
 
     <!-- Generic Modal Components (used by multiple modals) -->
     <script defer src="js/components/modals/SimpleFormModal.js"></script>
@@ -181,6 +195,7 @@
     <script defer src="js/components/modals/TypePdcModal.js"></script>
     <script defer src="js/components/modals/ProjectModal.js"></script>
     <script defer src="js/components/modals/ImportProjectsModal.js"></script>
+    <script defer src="js/components/modals/ImportEvaluationsModal.js"></script>
     <script defer src="js/components/modals/TaskModal.js"></script>
     <script defer src="js/components/modals/UserModal.js"></script>
     <script defer src="js/components/modals/UserCompetenceModal.js"></script>
@@ -221,6 +236,7 @@
     <script defer src="js/components/pages/PlanningPage.js"></script>
     <script defer src="js/components/pages/TemplateBuilderPage.js"></script>
     <script defer src="js/components/pages/AppointmentBookingPage.js"></script>
+    <script defer src="js/components/pages/RapportsPage.js"></script>
 
     <!-- Layout and App (loaded last) -->
     <script src="js/components/Layout.js"></script>
