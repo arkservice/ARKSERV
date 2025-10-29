@@ -497,7 +497,22 @@ function PdcPage({ onRowClick, selectionMode = false, onPdcSelected, onBack, bre
             formatCell: formatCell,
             emptyMessage: "Aucun plan de cours trouvé",
             emptyDescription: selectionMode ? "Aucun programme disponible pour le moment" : "Commencez par créer votre premier plan de cours",
-            searchableFields: ['pdc_number', 'logiciel.nom']
+            itemLabel: 'PDC',
+            itemLabelPlural: 'PDC',
+            columnFilters: {
+                'pdc_number': 'input',
+                'logiciel': 'input',
+                'duree_en_jour': 'input',
+                'metier_pdc.nom': 'input',
+                'type_pdc.nom': 'input',
+                'catalogue': {
+                    type: 'dropdown',
+                    options: [
+                        { value: 'spécifique', label: 'Spécifique' },
+                        { value: 'catalogue', label: 'Catalogue' }
+                    ]
+                }
+            }
         })),
         
         // Modal

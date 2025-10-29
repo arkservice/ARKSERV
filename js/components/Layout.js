@@ -14,18 +14,31 @@ function Layout() {
     const [highlightedTaskId, setHighlightedTaskId] = useState(null);
     const [projectDetailRefresh, setProjectDetailRefresh] = useState(null);
     const [evaluationToken, setEvaluationToken] = useState(null);
+    const [evaluationFroidToken, setEvaluationFroidToken] = useState(null);
 
     // Gérer le routing par hash pour les évaluations (accès public)
     useEffect(() => {
         const handleHashChange = () => {
             const hash = window.location.hash;
+
+            // Vérifier si l'URL contient #/evaluation-froid/[token]
+            const evaluationFroidMatch = hash.match(/^#\/evaluation-froid\/(.+)$/);
+            if (evaluationFroidMatch) {
+                const token = evaluationFroidMatch[1];
+                setEvaluationFroidToken(token);
+                setEvaluationToken(null);
+                return;
+            }
+
             // Vérifier si l'URL contient #/evaluation/[token]
             const evaluationMatch = hash.match(/^#\/evaluation\/(.+)$/);
             if (evaluationMatch) {
                 const token = evaluationMatch[1];
                 setEvaluationToken(token);
+                setEvaluationFroidToken(null);
             } else {
                 setEvaluationToken(null);
+                setEvaluationFroidToken(null);
             }
         };
 
@@ -53,7 +66,14 @@ function Layout() {
     };
 
     const renderContent = () => {
-        // Si un token d'évaluation est présent dans l'URL, afficher le formulaire d'évaluation
+        // Si un token d'évaluation à froid est présent dans l'URL
+        if (evaluationFroidToken) {
+            return React.createElement(window.EvaluationFroidFormPage, {
+                token: evaluationFroidToken
+            });
+        }
+
+        // Si un token d'évaluation chaude est présent dans l'URL
         if (evaluationToken) {
             return React.createElement(window.EvaluationFormPage, {
                 token: evaluationToken
@@ -450,8 +470,8 @@ function Layout() {
         }
     };
 
-    // Si on affiche le formulaire d'évaluation (accès public), ne pas afficher l'interface normale
-    if (evaluationToken) {
+    // Si on affiche un formulaire d'évaluation (accès public), ne pas afficher l'interface normale
+    if (evaluationToken || evaluationFroidToken) {
         return renderContent();
     }
 

@@ -4,13 +4,19 @@ function RapportsPage() {
     const { evaluations, loading } = window.useEvaluation();
     const iconsInitialized = useRef(false);
     const [filters, setFilters] = useState({
-        // Par défaut : année en cours
+        // Par défaut : 1er janvier → 31 décembre de l'année en cours
         startDate: (() => {
             const date = new Date();
-            date.setFullYear(date.getFullYear() - 1);
+            date.setMonth(0);        // Janvier
+            date.setDate(1);         // 1er jour
             return date.toISOString().split('T')[0];
         })(),
-        endDate: new Date().toISOString().split('T')[0]
+        endDate: (() => {
+            const date = new Date();
+            date.setMonth(11);       // Décembre
+            date.setDate(31);        // 31
+            return date.toISOString().split('T')[0];
+        })()
     });
     const [expandedSections, setExpandedSections] = useState({
         formateurs: true,
@@ -241,6 +247,22 @@ function RapportsPage() {
                     icon: 'thumbs-up',
                     color: stats.statsGlobales.tauxRecommandation >= 80 ? 'green' : 'yellow',
                     subtitle: 'Taux de recommandation'
+                }),
+                React.createElement(window.StatCard, {
+                    key: 'jours-formation',
+                    title: 'Jours de formation',
+                    value: stats.statsGlobales.nbJoursFormation,
+                    icon: 'calendar-days',
+                    color: 'blue',
+                    subtitle: 'Jours dispensés (uniques par projet)'
+                }),
+                React.createElement(window.StatCard, {
+                    key: 'formations',
+                    title: 'Formations',
+                    value: stats.statsGlobales.nbFormations,
+                    icon: 'briefcase',
+                    color: 'indigo',
+                    subtitle: 'Projets uniques (PRJ)'
                 })
             ])
         ]),

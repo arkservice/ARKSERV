@@ -124,12 +124,47 @@ function useRapportsStats(evaluations, filters = {}) {
             filteredEvaluations.map(e => e.satisf_recommandation).filter(Boolean)
         ) / 5 * 100;
 
+        // Calculer le nombre de jours de formation dispensés
+        // Compter les jours uniques par projet (formation.id)
+        const joursFormationMap = new Map();
+        filteredEvaluations.forEach(e => {
+            const formationId = e.formation?.id;
+            if (formationId && !joursFormationMap.has(formationId)) {
+                // Priorité : pdc.duree_en_jour sinon projects.duree/7
+                let jours = 0;
+                if (e.formation.pdc?.duree_en_jour != null) {
+                    jours = e.formation.pdc.duree_en_jour;
+                } else if (e.formation.duree) {
+                    const dureeStr = e.formation.duree.toString().trim();
+                    const match = dureeStr.match(/(\d+\.?\d*)/);
+                    if (match) {
+                        const value = parseFloat(match[1]);
+                        if (dureeStr.toLowerCase().includes('j')) {
+                            jours = value;
+                        } else {
+                            // Convertir heures en jours (diviser par 7)
+                            jours = Math.ceil(value / 7);
+                        }
+                    }
+                }
+                joursFormationMap.set(formationId, jours);
+            }
+        });
+
+        const nbJoursFormation = Array.from(joursFormationMap.values())
+            .reduce((sum, jours) => sum + jours, 0);
+
+        // Calculer le nombre de formations (projets uniques)
+        const nbFormations = joursFormationMap.size;
+
         return {
             total,
             traitees,
             tauxTraitees: total > 0 ? (traitees / total * 100) : 0,
             nbStagiairesUniques,
             nbEntreprisesUniques,
+            nbFormations,
+            nbJoursFormation,
             notesMoyennes,
             moyenneGlobale,
             tauxRecommandation

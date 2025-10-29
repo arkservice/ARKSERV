@@ -3,7 +3,73 @@
     'use strict';
 
 /**
- * Parse un fichier CSV avec délimiteur point-virgule
+ * Parse une ligne CSV en tenant compte des guillemets
+ * @param {string} line - Ligne CSV
+ * @param {string} delimiter - Délimiteur (virgule ou point-virgule)
+ * @returns {Array} - Tableau de valeurs
+ */
+function parseCSVLine(line, delimiter) {
+    const values = [];
+    let currentValue = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+            // Gérer les guillemets doublés ("") comme un guillemet littéral
+            if (insideQuotes && nextChar === '"') {
+                currentValue += '"';
+                i++; // Sauter le prochain guillemet
+            } else {
+                // Basculer l'état des guillemets
+                insideQuotes = !insideQuotes;
+            }
+        } else if (char === delimiter && !insideQuotes) {
+            // Nouvelle valeur (seulement si on n'est pas entre guillemets)
+            values.push(currentValue.trim());
+            currentValue = '';
+        } else {
+            currentValue += char;
+        }
+    }
+
+    // Ajouter la dernière valeur
+    values.push(currentValue.trim());
+
+    return values;
+}
+
+/**
+ * Détecte le délimiteur utilisé dans le CSV
+ * @param {string} headerLine - Première ligne du CSV
+ * @returns {string} - Délimiteur détecté (',' ou ';')
+ */
+function detectDelimiter(headerLine) {
+    // Compter les virgules et points-virgules hors guillemets
+    let commaCount = 0;
+    let semicolonCount = 0;
+    let insideQuotes = false;
+
+    for (let i = 0; i < headerLine.length; i++) {
+        const char = headerLine[i];
+
+        if (char === '"') {
+            insideQuotes = !insideQuotes;
+        } else if (!insideQuotes) {
+            if (char === ',') commaCount++;
+            if (char === ';') semicolonCount++;
+        }
+    }
+
+    // Retourner le délimiteur le plus fréquent
+    return commaCount > semicolonCount ? ',' : ';';
+}
+
+/**
+ * Parse un fichier CSV avec délimiteur virgule ou point-virgule
+ * Gère les valeurs entre guillemets contenant des délimiteurs
  * @param {string} csvContent - Contenu brut du fichier CSV
  * @returns {Array} - Tableau d'objets représentant les lignes
  */
@@ -16,18 +82,24 @@ function parseCSV(csvContent) {
 
     // Nettoyer le BOM UTF-8 s'il existe
     const firstLine = lines[0].replace(/^\uFEFF/, '');
-    const headers = firstLine.split(';').map(h => h.trim());
+
+    // Détecter automatiquement le délimiteur
+    const delimiter = detectDelimiter(firstLine);
+    console.log(`[CSV Parser] Délimiteur détecté: "${delimiter}"`);
+
+    // Parser les en-têtes
+    const headers = parseCSVLine(firstLine, delimiter);
 
     const data = [];
     for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line.trim()) continue;
 
-        const values = line.split(';');
+        const values = parseCSVLine(line, delimiter);
         const row = {};
 
         headers.forEach((header, index) => {
-            row[header] = values[index] ? values[index].trim() : '';
+            row[header] = values[index] ? values[index] : '';
         });
 
         data.push(row);
@@ -184,7 +256,7 @@ function parseTrainingHours(hoursString) {
 }
 
 /**
- * Combine une date et une heure
+ * Combine une date et une heure en UTC
  * @param {Date} date
  * @param {string} time - Format "HH:MM"
  * @returns {Date}
@@ -192,7 +264,8 @@ function parseTrainingHours(hoursString) {
 function combineDateAndTime(date, time) {
     const [hours, minutes] = time.split(':').map(n => parseInt(n, 10));
     const combined = new Date(date);
-    combined.setHours(hours, minutes, 0, 0);
+    // Utiliser setUTCHours pour éviter les problèmes de fuseau horaire
+    combined.setUTCHours(hours, minutes, 0, 0);
     return combined;
 }
 
@@ -277,10 +350,6 @@ function validateRow(row) {
         errors.push('Customer manquant ou invalide');
     }
 
-    if (!row.Software) {
-        errors.push('Software manquant');
-    }
-
     if (!row['Training Dates']) {
         errors.push('Training Dates manquant');
     }
@@ -311,16 +380,12 @@ function parseProjectRow(row) {
         prj: prjNumber,
         netsuiteId: prjNumber,
         companyName,
-        software: row.Software || '',
         pdcNumber,
-        trainingLength: row['Training Length (Days)'] || '',
-        duration: row['Duration (Hr)'] || '',
         sessions,
         hours,
         location: row['Training Location'] || '',
-        numberOfClients: parseInt(row['Number of clients'] || '0', 10),
         salesRep: row['Sales Rep'] || '',
-        formateur: row.formateur || '',
+        formateur: row['Project Resource'] || '',
         rawRow: row
     };
 }

@@ -147,7 +147,8 @@ function FormationPrepPage() {
                             heureDebut: heureDebut,
                             heureFin: heureFin,
                             lieu: event.lieu || '',
-                            adresse: event.adresse || ''
+                            adresse: event.adresse || '',
+                            agence_id: event.agence_id || null
                         };
                     });
 

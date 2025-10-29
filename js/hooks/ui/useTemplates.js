@@ -240,7 +240,7 @@ function useTemplates() {
     const getDefaultTemplate = async (documentType) => {
         try {
             // Valider le type de document
-            const validTypes = ['pdc', 'convocation', 'convention', 'emargement', 'qualiopi', 'attestation'];
+            const validTypes = ['pdc', 'convocation', 'convention', 'emargement', 'qualiopi', 'attestation', 'diplome'];
             if (!validTypes.includes(documentType)) {
                 console.warn(`Type de document non supporté: ${documentType}, utilisation de 'pdc'`);
                 documentType = 'pdc';
@@ -562,6 +562,17 @@ function useTemplates() {
                 { id: 'dates', name: 'Dates et durée', height: 15, width: 210, gapTop: 0, gapBottom: 0, paddingTop: 5, paddingRight: 20, paddingBottom: 5, paddingLeft: 20, backgroundColor: '#FFFFFF', alignment: 'center' },
                 { id: 'signature', name: 'Signature', height: 35, width: 210, gapTop: 0, gapBottom: 0, paddingTop: 8, paddingRight: 20, paddingBottom: 8, paddingLeft: 20, backgroundColor: '#FFFFFF', alignment: 'center' },
                 { id: 'footer', name: 'Pied de page', height: 30, width: 210, gapTop: 0, gapBottom: 0, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, backgroundColor: '#FFFFFF', alignment: 'center' }
+            ],
+            diplome: [
+                { id: 'header', name: 'En-tête', height: 12, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'titre', name: 'Titre', height: 20, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 5, paddingRight: 30, paddingBottom: 5, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'certification', name: 'Certification', height: 12, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 3, paddingRight: 30, paddingBottom: 3, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'stagiaire', name: 'Nom stagiaire', height: 12, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 3, paddingRight: 30, paddingBottom: 3, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'texte_intro', name: 'Texte intro', height: 10, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 2, paddingRight: 30, paddingBottom: 2, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'formation', name: 'Nom formation', height: 22, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 5, paddingRight: 30, paddingBottom: 5, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'dates', name: 'Dates et durée', height: 15, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 5, paddingRight: 30, paddingBottom: 5, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'center' },
+                { id: 'bas_page', name: 'Bas de page (Fait à + signatures)', height: 25, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 5, paddingRight: 30, paddingBottom: 5, paddingLeft: 30, backgroundColor: '#FFFFFF', alignment: 'left' },
+                { id: 'footer', name: 'Pied de page', height: 50, width: 297, gapTop: 0, gapBottom: 0, paddingTop: 0, paddingRight: 0, paddingBottom: 0, paddingLeft: 0, backgroundColor: '#FFFFFF', alignment: 'center' }
             ]
         };
 

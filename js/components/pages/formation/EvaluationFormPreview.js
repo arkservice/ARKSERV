@@ -3,6 +3,7 @@ function EvaluationFormPreview() {
     const { useState, useEffect } = React;
     const supabase = window.supabaseConfig.client;
     const [logoUrl, setLogoUrl] = useState(null);
+    const [activeTab, setActiveTab] = useState('chaude');
 
     // Données fictives de session pour la prévisualisation
     const mockSession = {
@@ -44,6 +45,7 @@ function EvaluationFormPreview() {
         moyens_support_cours: null,
         moyens_lieu_repas: '',
         moyens_restauration: null,
+        moyens_commentaires: '',
 
         // Section 03: Pédagogie
         peda_niveau_difficulte: null,
@@ -167,18 +169,45 @@ function EvaluationFormPreview() {
             ])
         ]),
 
-        // Logo Arkance
-        logoUrl && React.createElement('div', {
-            key: 'logo',
-            className: "flex justify-center mb-6"
-        }, React.createElement('img', {
-            src: logoUrl,
-            alt: 'Logo Arkance',
-            className: "h-16 md:h-20",
-            style: { maxWidth: '100%', objectFit: 'contain' }
-        })),
+        // Barre d'onglets
+        React.createElement('div', {
+            key: 'tabs',
+            className: "flex gap-2 mb-6"
+        }, [
+            React.createElement('button', {
+                key: 'tab-chaude',
+                onClick: () => setActiveTab('chaude'),
+                className: `flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                    activeTab === 'chaude'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`
+            }, 'Évaluation Chaude'),
+            React.createElement('button', {
+                key: 'tab-froid',
+                onClick: () => setActiveTab('froid'),
+                className: `flex-1 px-6 py-3 rounded-lg font-medium transition-all ${
+                    activeTab === 'froid'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`
+            }, 'Évaluation à Froid')
+        ]),
 
-        // En-tête
+        // Contenu selon l'onglet actif
+        activeTab === 'chaude' ? [
+            // Logo Arkance
+            logoUrl && React.createElement('div', {
+                key: 'logo',
+                className: "flex justify-center mb-6"
+            }, React.createElement('img', {
+                src: logoUrl,
+                alt: 'Logo Arkance',
+                className: "h-16 md:h-20",
+                style: { maxWidth: '100%', objectFit: 'contain' }
+            })),
+
+            // En-tête
         React.createElement('div', {
             key: 'header',
             className: "bg-white rounded-lg border border-gray-200 p-6 text-center"
@@ -266,19 +295,6 @@ function EvaluationFormPreview() {
                     key: 'row1',
                     className: "grid grid-cols-1 md:grid-cols-3 gap-4"
                 }, [
-                    React.createElement('div', { key: 'nom' }, [
-                        React.createElement('label', {
-                            key: 'label',
-                            className: "block text-sm font-medium text-gray-700 mb-1"
-                        }, "Nom *"),
-                        React.createElement('input', {
-                            key: 'input',
-                            type: 'text',
-                            value: formData.stagiaire_nom,
-                            onChange: (e) => handleFieldChange('stagiaire_nom', e.target.value),
-                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        })
-                    ]),
                     React.createElement('div', { key: 'prenom' }, [
                         React.createElement('label', {
                             key: 'label',
@@ -289,6 +305,19 @@ function EvaluationFormPreview() {
                             type: 'text',
                             value: formData.stagiaire_prenom,
                             onChange: (e) => handleFieldChange('stagiaire_prenom', e.target.value),
+                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        })
+                    ]),
+                    React.createElement('div', { key: 'nom' }, [
+                        React.createElement('label', {
+                            key: 'label',
+                            className: "block text-sm font-medium text-gray-700 mb-1"
+                        }, "Nom *"),
+                        React.createElement('input', {
+                            key: 'input',
+                            type: 'text',
+                            value: formData.stagiaire_nom,
+                            onChange: (e) => handleFieldChange('stagiaire_nom', e.target.value),
                             className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         })
                     ]),
@@ -355,21 +384,284 @@ function EvaluationFormPreview() {
         // Section Qualiopi
         window.createSectionQualiopi(formData, handleQualiopiChange),
 
-        // Message d'information au lieu du bouton soumettre
-        React.createElement('div', {
-            key: 'info-message',
-            className: "bg-gray-50 rounded-lg border border-gray-300 p-6 text-center"
-        }, [
-            React.createElement('i', {
-                key: 'icon',
-                'data-lucide': 'info',
-                className: "w-12 h-12 mx-auto text-gray-400 mb-3"
-            }),
-            React.createElement('p', {
-                key: 'text',
-                className: "text-gray-600"
-            }, "Ceci est un aperçu du formulaire. Dans un contexte réel, le stagiaire pourrait soumettre son évaluation ici.")
-        ])
+            // Message d'information au lieu du bouton soumettre
+            React.createElement('div', {
+                key: 'info-message',
+                className: "bg-gray-50 rounded-lg border border-gray-300 p-6 text-center"
+            }, [
+                React.createElement('i', {
+                    key: 'icon',
+                    'data-lucide': 'info',
+                    className: "w-12 h-12 mx-auto text-gray-400 mb-3"
+                }),
+                React.createElement('p', {
+                    key: 'text',
+                    className: "text-gray-600"
+                }, "Ceci est un aperçu du formulaire. Dans un contexte réel, le stagiaire pourrait soumettre son évaluation ici.")
+            ])
+        ] : [
+            // Logo Arkance
+            logoUrl && React.createElement('div', {
+                key: 'logo-froid',
+                className: "flex justify-center mb-6"
+            }, React.createElement('img', {
+                src: logoUrl,
+                alt: 'Logo Arkance',
+                className: "h-16 md:h-20",
+                style: { maxWidth: '100%', objectFit: 'contain' }
+            })),
+
+            // En-tête évaluation à froid
+            React.createElement('div', {
+                key: 'header-froid',
+                className: "bg-white rounded-lg shadow-sm p-6 mb-6"
+            }, [
+                React.createElement('h1', {
+                    key: 'h1',
+                    className: "text-3xl font-bold text-gray-900 mb-2"
+                }, 'Évaluation à froid'),
+                React.createElement('p', {
+                    key: 'subtitle',
+                    className: "text-gray-600"
+                }, 'Retour d\'expérience 30 jours après la formation')
+            ]),
+
+            // Informations de la formation (lecture seule)
+            React.createElement('div', {
+                key: 'info-froid',
+                className: "bg-white rounded-lg shadow-sm p-6 mb-6"
+            }, [
+                React.createElement('h2', {
+                    key: 'title',
+                    className: "text-xl font-bold text-gray-900 mb-4"
+                }, 'Informations'),
+                React.createElement('div', {
+                    key: 'grid',
+                    className: "grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"
+                }, [
+                    React.createElement('div', { key: 'prenom' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-gray-700"
+                        }, 'Prénom : '),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-gray-900"
+                        }, 'Jean')
+                    ]),
+                    React.createElement('div', { key: 'nom' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-gray-700"
+                        }, 'Nom : '),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-gray-900"
+                        }, 'Dupont')
+                    ]),
+                    React.createElement('div', { key: 'email' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-gray-700"
+                        }, 'Email : '),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-gray-900"
+                        }, 'jean.dupont@exemple.com')
+                    ]),
+                    React.createElement('div', { key: 'fonction' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-gray-700"
+                        }, 'Fonction : '),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-gray-900"
+                        }, 'Dessinateur projeteur')
+                    ]),
+                    React.createElement('div', { key: 'formation', className: "md:col-span-2" }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "font-medium text-gray-700"
+                        }, 'Formation : '),
+                        React.createElement('span', {
+                            key: 'value',
+                            className: "text-gray-900"
+                        }, `${mockSession.pdc.ref} - Introduction à Revit`)
+                    ])
+                ])
+            ]),
+
+            // Section 1: Mise en pratique
+            React.createElement('div', {
+                key: 'section1-froid',
+                className: "bg-white rounded-lg shadow-sm p-6 mb-6"
+            }, [
+                React.createElement('h2', {
+                    key: 'title',
+                    className: "text-2xl font-bold text-gray-900 mb-6"
+                }, 'Mise en pratique de la formation'),
+                React.createElement('div', {
+                    key: 'questions',
+                    className: "space-y-6"
+                }, [
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q1',
+                        question: "1. Êtes-vous en mesure d'appliquer les connaissances acquises lors de la formation ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q2',
+                        question: "2. Êtes-vous en mesure de mieux appréhender le logiciel ou les thèmes abordés ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q3',
+                        question: "3. La formation a-t-elle facilité votre quotidien ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q4',
+                        question: "4. A-t-elle amélioré la qualité ou l'efficacité de votre travail ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q5',
+                        question: "5. Vous a-t-elle permis de développer de nouvelles compétences ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement('div', { key: 'q6' }, [
+                        React.createElement('label', {
+                            key: 'label',
+                            className: "block text-sm font-medium text-gray-700 mb-2"
+                        }, "6. Autres bénéfices, précisez (optionnel)"),
+                        React.createElement('textarea', {
+                            key: 'textarea',
+                            value: '',
+                            onChange: () => {},
+                            rows: 3,
+                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                        })
+                    ])
+                ])
+            ]),
+
+            // Section 2: Bilan de la formation
+            React.createElement('div', {
+                key: 'section2-froid',
+                className: "bg-white rounded-lg shadow-sm p-6 mb-6"
+            }, [
+                React.createElement('h2', {
+                    key: 'title',
+                    className: "text-2xl font-bold text-gray-900 mb-6"
+                }, 'Bilan de la formation'),
+                React.createElement('div', {
+                    key: 'questions',
+                    className: "space-y-6"
+                }, [
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q7',
+                        question: "7. La formation a-t-elle répondu à vos attentes initiales ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q8',
+                        question: "8. Pensez-vous avoir atteint les objectifs pédagogiques prévus lors de la formation ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q9',
+                        question: "9. Estimez-vous que la formation était en adéquation avec le métier ou les réalités du secteur ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    })
+                ])
+            ]),
+
+            // Section 3: Satisfaction globale
+            React.createElement('div', {
+                key: 'section3-froid',
+                className: "bg-white rounded-lg shadow-sm p-6 mb-6"
+            }, [
+                React.createElement('h2', {
+                    key: 'title',
+                    className: "text-2xl font-bold text-gray-900 mb-6"
+                }, 'Satisfaction globale'),
+                React.createElement('div', {
+                    key: 'questions',
+                    className: "space-y-6"
+                }, [
+                    React.createElement(window.YesNoQuestion, {
+                        key: 'q10',
+                        question: "10. Recommanderiez-vous notre service à un ami ou un collègue ?",
+                        value: null,
+                        onChange: () => {},
+                        required: true
+                    }),
+                    React.createElement('div', { key: 'q11' }, [
+                        React.createElement('label', {
+                            key: 'label',
+                            className: "block text-sm font-medium text-gray-700 mb-2"
+                        }, [
+                            "11. Quel est votre niveau de satisfaction globale ?",
+                            React.createElement('span', {
+                                key: 'asterisk',
+                                className: "text-red-600 ml-1"
+                            }, '*')
+                        ]),
+                        React.createElement(window.StarRating, {
+                            key: 'rating',
+                            value: null,
+                            onChange: () => {}
+                        })
+                    ]),
+                    React.createElement('div', { key: 'q12' }, [
+                        React.createElement('label', {
+                            key: 'label',
+                            className: "block text-sm font-medium text-gray-700 mb-2"
+                        }, "12. Vos commentaires concernant votre satisfaction (optionnel)"),
+                        React.createElement('textarea', {
+                            key: 'textarea',
+                            value: '',
+                            onChange: () => {},
+                            rows: 4,
+                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                        })
+                    ])
+                ])
+            ]),
+
+            // Message d'information
+            React.createElement('div', {
+                key: 'info-message-froid',
+                className: "bg-gray-50 rounded-lg border border-gray-300 p-6 text-center"
+            }, [
+                React.createElement('i', {
+                    key: 'icon',
+                    'data-lucide': 'info',
+                    className: "w-12 h-12 mx-auto text-gray-400 mb-3"
+                }),
+                React.createElement('p', {
+                    key: 'text',
+                    className: "text-gray-600"
+                }, "Ceci est un aperçu du formulaire d'évaluation à froid. Dans un contexte réel, le stagiaire pourrait soumettre son évaluation ici.")
+            ])
+        ]
     ]));
 }
 

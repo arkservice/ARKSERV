@@ -22,15 +22,18 @@ function useEvaluation() {
                         evaluation_token,
                         prj,
                         lieu_projet,
+                        duree,
                         pdc:pdc_id(
                             id,
                             ref,
                             pdc_number,
                             version_logiciel,
+                            duree_en_jour,
                             logiciel:logiciel_id(nom, logo),
                             metier_pdc:metier_pdc_id(nom),
                             type_pdc:type_pdc_id(nom)
                         ),
+                        logiciel:logiciel_id(nom, logo),
                         formateur:formateur_id(
                             id,
                             nom,
@@ -69,15 +72,18 @@ function useEvaluation() {
                         evaluation_token,
                         prj,
                         lieu_projet,
+                        duree,
                         pdc:pdc_id(
                             id,
                             ref,
                             pdc_number,
                             version_logiciel,
+                            duree_en_jour,
                             logiciel:logiciel_id(nom, logo),
                             metier_pdc:metier_pdc_id(nom),
                             type_pdc:type_pdc_id(nom)
                         ),
+                        logiciel:logiciel_id(nom, logo),
                         formateur:formateur_id(
                             nom,
                             prenom,
@@ -110,15 +116,18 @@ function useEvaluation() {
                         evaluation_token,
                         prj,
                         lieu_projet,
+                        duree,
                         pdc:pdc_id(
                             id,
                             ref,
                             pdc_number,
                             version_logiciel,
+                            duree_en_jour,
                             logiciel:logiciel_id(nom, logo),
                             metier_pdc:metier_pdc_id(nom),
                             type_pdc:type_pdc_id(nom)
                         ),
+                        logiciel:logiciel_id(nom, logo),
                         formateur:formateur_id(
                             id,
                             nom,
@@ -149,9 +158,26 @@ function useEvaluation() {
         try {
             setError(null);
 
+            // Générer un token unique pour l'évaluation à froid
+            const generateFroidToken = () => {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                let token = 'eval_froid_';
+                for (let i = 0; i < 32; i++) {
+                    token += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return token;
+            };
+
+            // Ajouter le token d'évaluation à froid et le type
+            const dataWithToken = {
+                ...evaluationData,
+                evaluation_type: 'chaude',
+                evaluation_froid_token: generateFroidToken()
+            };
+
             const { data, error: insertError } = await supabase
                 .from('evaluation')
-                .insert(evaluationData)
+                .insert(dataWithToken)
                 .select()
                 .single();
 
@@ -231,6 +257,54 @@ function useEvaluation() {
             return data;
         } catch (err) {
             console.error('Erreur lors de la mise à jour de l\'évaluation formateur:', err);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    // Récupérer une évaluation par son token à froid
+    const getEvaluationByFroidToken = async (token) => {
+        try {
+            setError(null);
+            const { data, error: fetchError } = await supabase
+                .from('evaluation')
+                .select(`
+                    *,
+                    formation:formation_id(
+                        id,
+                        evaluation_token,
+                        prj,
+                        lieu_projet,
+                        pdc:pdc_id(
+                            id,
+                            ref,
+                            pdc_number,
+                            version_logiciel,
+                            logiciel:logiciel_id(nom, logo),
+                            metier_pdc:metier_pdc_id(nom),
+                            type_pdc:type_pdc_id(nom)
+                        ),
+                        formateur:formateur_id(
+                            id,
+                            nom,
+                            prenom,
+                            email
+                        ),
+                        commercial:commercial_id(
+                            nom,
+                            prenom,
+                            email
+                        )
+                    )
+                `)
+                .eq('evaluation_froid_token', token)
+                .eq('evaluation_type', 'chaude')
+                .single();
+
+            if (fetchError) throw fetchError;
+            return data;
+        } catch (err) {
+            console.error('Erreur lors du chargement de l\'évaluation par token à froid:', err);
             setError(err.message);
             throw err;
         }
@@ -331,6 +405,7 @@ function useEvaluation() {
         fetchEvaluations,
         getEvaluationsBySession,
         getEvaluationById,
+        getEvaluationByFroidToken,
         createEvaluation,
         updateEvaluation,
         deleteEvaluation,

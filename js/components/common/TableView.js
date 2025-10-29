@@ -30,36 +30,61 @@ function DeleteIcon({ className = "w-4 h-4" }) {
 }
 
 // Composant TableView générique style Airtable - Optimized with debounce
-function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, onEdit, onDelete, onRowClick, getRowClassName, groupBy, expandAll, onGroupChange, onExpandChange, groupingOptions, customActions, onCellEdit, searchableFields }) {
+function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, onEdit, onDelete, onRowClick, getRowClassName, groupBy, expandAll, onGroupChange, onExpandChange, groupingOptions, customActions, onCellEdit, searchableFields, columnFilters, itemLabel = 'projet', itemLabelPlural }) {
     const { useState, useEffect, useMemo, useRef } = React;
 
     // Debug
     console.log('TableView - onImport reçu:', !!onImport);
-    
+
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
     const [sortKey, setSortKey] = useState('');
     const [sortDirection, setSortDirection] = useState('asc');
     const [openDropdown, setOpenDropdown] = useState(null); // {rowId, columnKey, position} ou null
+
+    // États pour les filtres par colonne
+    const [columnFilterValues, setColumnFilterValues] = useState({});
+    const [debouncedColumnFilters, setDebouncedColumnFilters] = useState({});
     
     // Debounce pour la recherche
     const debounceTimer = useRef(null);
-    
+    const columnFilterTimers = useRef({});
+
     useEffect(() => {
         if (debounceTimer.current) {
             clearTimeout(debounceTimer.current);
         }
-        
+
         debounceTimer.current = setTimeout(() => {
             setDebouncedSearchTerm(searchTerm);
         }, 300); // Délai de 300ms
-        
+
         return () => {
             if (debounceTimer.current) {
                 clearTimeout(debounceTimer.current);
             }
         };
     }, [searchTerm]);
+
+    // Debounce pour les filtres par colonne
+    useEffect(() => {
+        Object.keys(columnFilterValues).forEach(columnKey => {
+            if (columnFilterTimers.current[columnKey]) {
+                clearTimeout(columnFilterTimers.current[columnKey]);
+            }
+
+            columnFilterTimers.current[columnKey] = setTimeout(() => {
+                setDebouncedColumnFilters(prev => ({
+                    ...prev,
+                    [columnKey]: columnFilterValues[columnKey]
+                }));
+            }, 300);
+        });
+
+        return () => {
+            Object.values(columnFilterTimers.current).forEach(timer => clearTimeout(timer));
+        };
+    }, [columnFilterValues]);
     
     // Fermer le dropdown lors d'un clic à l'extérieur
     useEffect(() => {
@@ -87,57 +112,109 @@ function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, o
     }, [openDropdown]);
     
     const filteredData = useMemo(() => {
-        // Si searchableFields est défini, chercher uniquement dans ces champs
-        if (searchableFields && searchableFields.length > 0) {
-            return data.filter(row => {
-                return searchableFields.some(fieldPath => {
-                    // Supporter les chemins imbriqués comme 'logiciel.nom'
-                    const fieldValue = fieldPath.split('.').reduce((obj, key) => {
-                        return obj?.[key];
-                    }, row);
+        let result = data;
+
+        // Appliquer d'abord la recherche globale
+        if (debouncedSearchTerm) {
+            // Si searchableFields est défini, chercher uniquement dans ces champs
+            if (searchableFields && searchableFields.length > 0) {
+                result = result.filter(row => {
+                    return searchableFields.some(fieldPath => {
+                        // Supporter les chemins imbriqués comme 'logiciel.nom'
+                        const fieldValue = fieldPath.split('.').reduce((obj, key) => {
+                            return obj?.[key];
+                        }, row);
+
+                        if (fieldValue === null || fieldValue === undefined) {
+                            return false;
+                        }
+
+                        return String(fieldValue).toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+                    });
+                });
+            } else {
+                // Sinon, comportement par défaut : chercher dans tous les champs récursivement
+                const extractSearchableValues = (obj, depth = 0, maxDepth = 2) => {
+                    if (depth > maxDepth || obj === null || obj === undefined) {
+                        return [];
+                    }
+
+                    const values = [];
+
+                    for (const value of Object.values(obj)) {
+                        if (value === null || value === undefined) {
+                            continue;
+                        }
+
+                        // Si c'est un objet, explorer récursivement
+                        if (typeof value === 'object' && !Array.isArray(value)) {
+                            values.push(...extractSearchableValues(value, depth + 1, maxDepth));
+                        }
+                        // Si c'est une valeur primitive (string, number, boolean)
+                        else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                            values.push(String(value));
+                        }
+                    }
+
+                    return values;
+                };
+
+                result = result.filter(row => {
+                    const searchableValues = extractSearchableValues(row);
+                    return searchableValues.some(value =>
+                        value.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+                    );
+                });
+            }
+        }
+
+        // Appliquer ensuite les filtres par colonne
+        if (columnFilters && Object.keys(debouncedColumnFilters).length > 0) {
+            result = result.filter(row => {
+                return Object.entries(debouncedColumnFilters).every(([columnKey, filterValue]) => {
+                    if (!filterValue || filterValue.trim() === '') {
+                        return true; // Pas de filtre pour cette colonne
+                    }
+
+                    // Trouver la colonne correspondante pour gérer les cas spéciaux
+                    const column = columns.find(col => col.key === columnKey);
+                    let fieldValue;
+
+                    // Vérifier si le columnKey contient un point (chemin imbriqué)
+                    if (columnKey.includes('.')) {
+                        // Supporter les chemins imbriqués comme 'metier_pdc.nom'
+                        fieldValue = columnKey.split('.').reduce((obj, key) => {
+                            return obj?.[key];
+                        }, row);
+                    } else if (column && column.render) {
+                        // Si la colonne a un render custom, extraire la valeur du render
+                        fieldValue = row[columnKey];
+
+                        // Cas spécial pour les objets imbriqués (comme logiciel.nom)
+                        if (fieldValue && typeof fieldValue === 'object') {
+                            // Si c'est un objet, chercher dans la propriété 'nom' par défaut
+                            fieldValue = fieldValue.nom || fieldValue;
+                        }
+                    } else {
+                        // Cas simple : accès direct
+                        fieldValue = row[columnKey];
+                    }
 
                     if (fieldValue === null || fieldValue === undefined) {
                         return false;
                     }
 
-                    return String(fieldValue).toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+                    // Convertir en string et comparer (case-insensitive pour le texte)
+                    const fieldValueStr = String(fieldValue).toLowerCase();
+                    const filterValueLower = filterValue.toLowerCase();
+
+                    return fieldValueStr.includes(filterValueLower);
                 });
             });
         }
 
-        // Sinon, comportement par défaut : chercher dans tous les champs récursivement
-        const extractSearchableValues = (obj, depth = 0, maxDepth = 2) => {
-            if (depth > maxDepth || obj === null || obj === undefined) {
-                return [];
-            }
-
-            const values = [];
-
-            for (const value of Object.values(obj)) {
-                if (value === null || value === undefined) {
-                    continue;
-                }
-
-                // Si c'est un objet, explorer récursivement
-                if (typeof value === 'object' && !Array.isArray(value)) {
-                    values.push(...extractSearchableValues(value, depth + 1, maxDepth));
-                }
-                // Si c'est une valeur primitive (string, number, boolean)
-                else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-                    values.push(String(value));
-                }
-            }
-
-            return values;
-        };
-
-        return data.filter(row => {
-            const searchableValues = extractSearchableValues(row);
-            return searchableValues.some(value =>
-                value.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-            );
-        });
-    }, [data, debouncedSearchTerm, searchableFields]);
+        return result;
+    }, [data, debouncedSearchTerm, searchableFields, debouncedColumnFilters, columnFilters]);
     
     const sortedData = useMemo(() => 
         [...filteredData].sort((a, b) => {
@@ -594,7 +671,8 @@ function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, o
                 key: 'toolbar',
                 className: "flex items-center gap-4 mt-4"
             }, [
-                React.createElement('div', {
+                // Barre de recherche globale (uniquement si searchableFields est défini)
+                searchableFields && searchableFields.length > 0 && React.createElement('div', {
                     key: 'search-container',
                     className: "flex-1 max-w-md relative"
                 }, [
@@ -626,7 +704,13 @@ function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, o
                 React.createElement('div', {
                     key: 'stats',
                     className: "text-sm text-gray-500"
-                }, `${sortedData.length} projet${sortedData.length > 1 ? 's' : ''}`)
+                }, [
+                    React.createElement('span', {
+                        key: 'count',
+                        className: "font-bold"
+                    }, sortedData.length),
+                    ` ${sortedData.length > 1 ? (itemLabelPlural || itemLabel + 's') : itemLabel}`
+                ])
             ])
         ]),
         
@@ -642,31 +726,94 @@ function TableView({ data, columns, title, subtitle, loading, onAdd, onImport, o
                 React.createElement('thead', {
                     key: 'thead',
                     className: "bg-gray-50 border-b border-gray-200"
-                }, React.createElement('tr', { key: 'header-row' }, 
-                    columns.map((column) => 
-                        React.createElement('th', {
-                            key: column.key,
-                            className: `px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                                column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
-                            }`,
-                            style: column.width ? { width: column.width } : {},
-                            onClick: column.sortable ? () => handleSort(column.key) : undefined
-                        }, React.createElement('div', {
-                            className: "flex items-center gap-2"
-                        }, [
-                            column.label,
-                            column.sortable && React.createElement('i', {
-                                key: 'sort-icon',
-                                'data-lucide': 'chevron-down',
-                                className: `w-4 h-4 transition-transform ${
-                                    sortKey === column.key && sortDirection === 'desc'
-                                        ? 'transform rotate-180'
-                                        : ''
-                                }`
-                            })
-                        ]))
+                }, [
+                    React.createElement('tr', { key: 'header-row' },
+                        columns.map((column) =>
+                            React.createElement('th', {
+                                key: column.key,
+                                className: `px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${
+                                    column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''
+                                }`,
+                                style: column.width ? { width: column.width } : {},
+                                onClick: column.sortable ? () => handleSort(column.key) : undefined
+                            }, React.createElement('div', {
+                                className: "flex items-center gap-2"
+                            }, [
+                                column.label,
+                                column.sortable && React.createElement('i', {
+                                    key: 'sort-icon',
+                                    'data-lucide': 'chevron-down',
+                                    className: `w-4 h-4 transition-transform ${
+                                        sortKey === column.key && sortDirection === 'desc'
+                                            ? 'transform rotate-180'
+                                            : ''
+                                    }`
+                                })
+                            ]))
+                        )
+                    ),
+                    // Ligne de filtres par colonne
+                    columnFilters && Object.keys(columnFilters).length > 0 && React.createElement('tr', { key: 'filter-row' },
+                        columns.map((column) => {
+                            const filterConfig = columnFilters[column.key];
+                            const hasFilter = !!filterConfig;
+
+                            if (!hasFilter) {
+                                return React.createElement('th', {
+                                    key: `filter-${column.key}`,
+                                    className: "px-6 py-2 bg-gray-50"
+                                });
+                            }
+
+                            // Si c'est un objet de configuration (dropdown)
+                            if (typeof filterConfig === 'object' && filterConfig.type === 'dropdown') {
+                                return React.createElement('th', {
+                                    key: `filter-${column.key}`,
+                                    className: "px-6 py-2 bg-gray-50"
+                                }, React.createElement('select', {
+                                    value: columnFilterValues[column.key] || '',
+                                    onChange: (e) => {
+                                        setColumnFilterValues(prev => ({
+                                            ...prev,
+                                            [column.key]: e.target.value
+                                        }));
+                                    },
+                                    onClick: (e) => e.stopPropagation(),
+                                    className: "w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent bg-white"
+                                }, [
+                                    React.createElement('option', {
+                                        key: 'all',
+                                        value: ''
+                                    }, 'Tous'),
+                                    ...(filterConfig.options || []).map(opt =>
+                                        React.createElement('option', {
+                                            key: opt.value,
+                                            value: opt.value
+                                        }, opt.label)
+                                    )
+                                ]));
+                            }
+
+                            // Sinon, c'est un input texte simple
+                            return React.createElement('th', {
+                                key: `filter-${column.key}`,
+                                className: "px-6 py-2 bg-gray-50"
+                            }, React.createElement('input', {
+                                type: 'text',
+                                placeholder: `Rechercher...`,
+                                value: columnFilterValues[column.key] || '',
+                                onChange: (e) => {
+                                    setColumnFilterValues(prev => ({
+                                        ...prev,
+                                        [column.key]: e.target.value
+                                    }));
+                                },
+                                onClick: (e) => e.stopPropagation(),
+                                className: "w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                            }));
+                        })
                     )
-                )),
+                ]),
                 React.createElement('tbody', {
                     key: 'tbody',
                     className: "bg-white divide-y divide-gray-200"

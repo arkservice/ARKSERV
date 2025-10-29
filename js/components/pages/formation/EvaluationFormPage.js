@@ -34,6 +34,7 @@ function EvaluationFormPage({ token }) {
         moyens_support_cours: null,
         moyens_lieu_repas: '',
         moyens_restauration: null,
+        moyens_commentaires: '',
 
         // Section 03: Pédagogie
         peda_niveau_difficulte: null,
@@ -564,19 +565,6 @@ function EvaluationFormPage({ token }) {
                     key: 'row1',
                     className: "grid grid-cols-1 md:grid-cols-3 gap-4"
                 }, [
-                    React.createElement('div', { key: 'nom' }, [
-                        React.createElement('label', {
-                            key: 'label',
-                            className: "block text-sm font-medium text-gray-700 mb-1"
-                        }, "Nom *"),
-                        React.createElement('input', {
-                            key: 'input',
-                            type: 'text',
-                            value: formData.stagiaire_nom,
-                            onChange: (e) => handleFieldChange('stagiaire_nom', e.target.value),
-                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        })
-                    ]),
                     React.createElement('div', { key: 'prenom' }, [
                         React.createElement('label', {
                             key: 'label',
@@ -587,6 +575,19 @@ function EvaluationFormPage({ token }) {
                             type: 'text',
                             value: formData.stagiaire_prenom,
                             onChange: (e) => handleFieldChange('stagiaire_prenom', e.target.value),
+                            className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        })
+                    ]),
+                    React.createElement('div', { key: 'nom' }, [
+                        React.createElement('label', {
+                            key: 'label',
+                            className: "block text-sm font-medium text-gray-700 mb-1"
+                        }, "Nom *"),
+                        React.createElement('input', {
+                            key: 'input',
+                            type: 'text',
+                            value: formData.stagiaire_nom,
+                            onChange: (e) => handleFieldChange('stagiaire_nom', e.target.value),
                             className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         })
                     ]),
@@ -708,7 +709,7 @@ function createSection01(formData, handleFieldChange) {
                 React.createElement('label', {
                     key: 'label',
                     className: "block text-sm font-medium text-gray-700 mb-2"
-                }, "Vos commentaires concernant les moyens"),
+                }, "Vos commentaires concernant l'organisation"),
                 React.createElement('textarea', {
                     key: 'textarea',
                     value: formData.org_commentaires,
@@ -799,7 +800,20 @@ function createSection02(formData, handleFieldChange, session) {
             formData.moyens_restauration,
             (value) => handleFieldChange('moyens_restauration', value),
             true
-        )
+        ),
+        React.createElement('div', { key: 'comments' }, [
+            React.createElement('label', {
+                key: 'label',
+                className: "block text-sm font-medium text-gray-700 mb-2"
+            }, "Vos commentaires concernant les moyens"),
+            React.createElement('textarea', {
+                key: 'textarea',
+                value: formData.moyens_commentaires,
+                onChange: (e) => handleFieldChange('moyens_commentaires', e.target.value),
+                rows: 4,
+                className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+            })
+        ])
     ].filter(Boolean); // Filtrer les éléments false
 
     return React.createElement('div', {

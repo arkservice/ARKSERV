@@ -185,7 +185,7 @@ function useFormation() {
             if (data) {
                 const { data: eventsData, error: eventsError } = await supabase
                     .from('evenement')
-                    .select('lieu, adresse, date_debut, date_fin')
+                    .select('lieu, adresse, agence_id, date_debut, date_fin')
                     .eq('projet_id', data.id)
                     .eq('type_evenement', 'formation')
                     .order('date_debut', { ascending: true });
@@ -196,6 +196,7 @@ function useFormation() {
                     // Garder aussi le premier pour compatibilité avec ancien code
                     data.lieu = eventsData[0].lieu;
                     data.adresse = eventsData[0].adresse;
+                    data.agence_id = eventsData[0].agence_id;
                 }
             }
 
@@ -416,6 +417,7 @@ function useFormation() {
                     projet_id: projet.id,
                     lieu: session.lieu || '',
                     adresse: session.adresse || '',
+                    agence_id: session.agence_id || null,
                     statut: 'planifie'
                 };
             });

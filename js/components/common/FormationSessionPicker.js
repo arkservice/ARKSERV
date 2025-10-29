@@ -54,8 +54,8 @@ function FormationSessionPicker({
         const heureF = session.heureFin || '17:00';
 
         // Déterminer si c'est une heure standard ou personnalisée
-        const heureDebutValue = ['09:00', '13:00'].includes(heureD) ? heureD : 'personnalise';
-        const heureFinValue = ['12:00', '17:00'].includes(heureF) ? heureF : 'personnalise';
+        const heureDebutValue = ['09:00', '13:30'].includes(heureD) ? heureD : 'personnalise';
+        const heureFinValue = ['12:30', '17:00'].includes(heureF) ? heureF : 'personnalise';
 
         setFormData({
             dateDebut: session.dateDebut.toISOString().split('T')[0],
@@ -241,6 +241,17 @@ function FormationSessionPicker({
                         session.lieu === 'Dans vos locaux' && session.adresse && React.createElement('div', {
                             key: 'adresse',
                             className: 'text-xs text-gray-600 mt-1'
+                        }, session.adresse),
+                        session.lieu === 'Dans nos locaux' && session.agence_id && React.createElement('div', {
+                            key: 'agence',
+                            className: 'text-xs text-gray-600 mt-1'
+                        }, (() => {
+                            const agence = agences.find(a => a.id === session.agence_id);
+                            return agence ? `${agence.nom} - ${agence.adresse.split('\n').join(', ')}` : session.adresse;
+                        })()),
+                        session.lieu === 'Dans nos locaux' && !session.agence_id && session.adresse && React.createElement('div', {
+                            key: 'adresse-fallback',
+                            className: 'text-xs text-gray-600 mt-1'
                         }, session.adresse)
                     ])
                 ]),
@@ -371,9 +382,9 @@ function FormationSessionPicker({
                             value: '09:00'
                         }, '09h00'),
                         React.createElement('option', {
-                            key: '13:00',
-                            value: '13:00'
-                        }, '13h00'),
+                            key: '13:30',
+                            value: '13:30'
+                        }, '13h30'),
                         React.createElement('option', {
                             key: 'personnalise',
                             value: 'personnalise'
@@ -432,9 +443,9 @@ function FormationSessionPicker({
                         className: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500'
                     }, [
                         React.createElement('option', {
-                            key: '12:00',
-                            value: '12:00'
-                        }, '12h00'),
+                            key: '12:30',
+                            value: '12:30'
+                        }, '12h30'),
                         React.createElement('option', {
                             key: '17:00',
                             value: '17:00'

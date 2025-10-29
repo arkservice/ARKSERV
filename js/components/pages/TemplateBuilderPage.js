@@ -20,7 +20,7 @@ function TemplateBuilderPage() {
     // États pour le layout editor
     const [sections, setSections] = useState([]);
     const [selectedSectionId, setSelectedSectionId] = useState(null);
-    const [viewMode, setViewMode] = useState('visual'); // 'visual' ou 'pdf'
+    const [viewMode, setViewMode] = useState('pdf'); // 'visual' ou 'pdf'
     const [imagesExpanded, setImagesExpanded] = useState(true); // Pour toggle section images
     const iframeRef = React.useRef(null);
     
@@ -37,7 +37,8 @@ function TemplateBuilderPage() {
         { id: 'convention', label: 'Convention', icon: 'file-signature', description: 'Templates pour les conventions de formation professionnelle' },
         { id: 'emargement', label: 'Émargement', icon: 'clipboard-check', description: 'Templates pour les feuilles d\'émargement par stagiaire' },
         { id: 'qualiopi', label: 'Évaluation Qualiopi', icon: 'award', description: 'Templates pour les évaluations Qualiopi (EVALUATION DES ACQUIS)' },
-        { id: 'attestation', label: 'Attestation', icon: 'award', description: 'Templates pour les attestations de formation' }
+        { id: 'attestation', label: 'Attestation', icon: 'award', description: 'Templates pour les attestations de formation' },
+        { id: 'diplome', label: 'Diplôme', icon: 'certificate', description: 'Templates pour les diplômes de formation (A4 paysage)' }
     ];
     
     // Hooks pour les données
@@ -304,6 +305,16 @@ function TemplateBuilderPage() {
                     pdfBlob = await window.generateDiplomePDF(diplomeData, pdfParams);
                     break;
 
+                case 'diplome':
+                    if (!window.generateDiplomeFormationPDF) {
+                        showNotification('Générateur de diplôme non disponible', 'error');
+                        return;
+                    }
+                    // Utiliser l'évaluation sélectionnée pour les données du diplôme
+                    const diplomeFormationData = await getDiplomeDataFromEvaluation(selectedEvaluation);
+                    pdfBlob = await window.generateDiplomeFormationPDF(diplomeFormationData, pdfParams);
+                    break;
+
                 default:
                     showNotification('Type de document non supporté', 'error');
                     return;
@@ -413,6 +424,16 @@ function TemplateBuilderPage() {
                     // Utiliser l'évaluation sélectionnée
                     const diplomeProdData = await getDiplomeDataFromEvaluation(selectedEvaluation);
                     pdfBlob = await window.generateDiplomePDF(diplomeProdData, pdfParams);
+                    break;
+
+                case 'diplome':
+                    if (!window.generateDiplomeFormationPDF) {
+                        showNotification('Générateur de diplôme non disponible', 'error');
+                        return;
+                    }
+                    // Utiliser l'évaluation sélectionnée pour les données du diplôme
+                    const diplomeFormationProdData = await getDiplomeDataFromEvaluation(selectedEvaluation);
+                    pdfBlob = await window.generateDiplomeFormationPDF(diplomeFormationProdData, pdfParams);
                     break;
 
                 default:
@@ -828,8 +849,8 @@ function TemplateBuilderPage() {
             if (selectedDocumentType === 'emargement' && !selectedProject) {
                 return;
             }
-            // Pour attestation et qualiopi, on a besoin d'une évaluation sélectionnée
-            if ((selectedDocumentType === 'attestation' || selectedDocumentType === 'qualiopi') && !selectedEvaluation) {
+            // Pour attestation, qualiopi et diplome, on a besoin d'une évaluation sélectionnée
+            if ((selectedDocumentType === 'attestation' || selectedDocumentType === 'qualiopi' || selectedDocumentType === 'diplome') && !selectedEvaluation) {
                 return;
             }
 
@@ -1029,6 +1050,25 @@ function TemplateBuilderPage() {
                                 }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'}`)
                             )
                         )
+                ) : selectedDocumentType === 'diplome' ? (
+                    evaluationsLoading ?
+                        React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' }, 'Chargement des évaluations...') :
+                        React.createElement('select', {
+                            value: selectedEvaluation?.id || '',
+                            onChange: (e) => {
+                                const evaluation = evaluations.find(ev => ev.id === e.target.value);
+                                setSelectedEvaluation(evaluation);
+                            },
+                            className: 'w-full p-3 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
+                        },
+                            React.createElement('option', { value: '' }, 'Sélectionner une évaluation...'),
+                            evaluations?.map(evaluation =>
+                                React.createElement('option', {
+                                    key: evaluation.id,
+                                    value: evaluation.id
+                                }, `${evaluation.stagiaire_prenom} ${evaluation.stagiaire_nom} - ${evaluation.formation?.pdc?.ref || 'N/A'}`)
+                            )
+                        )
                 ) : (
                     React.createElement('div', { className: 'text-center py-2 text-sm text-gray-500' },
                         'Sélectionnez un type de document')
@@ -1130,13 +1170,13 @@ function TemplateBuilderPage() {
                                 React.createElement('button', {
                                     key: 'preview',
                                     onClick: generatePreview,
-                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation),
+                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation) || (selectedDocumentType === 'diplome' && !selectedEvaluation),
                                     className: 'bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50'
                                 }, isGenerating ? 'Génération...' : 'Actualiser'),
                                 React.createElement('button', {
                                     key: 'prod-test',
                                     onClick: generateProdTest,
-                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation),
+                                    disabled: isGenerating || (selectedDocumentType === 'pdc' && !selectedPdc) || (selectedDocumentType === 'convocation' && !selectedFormation) || (selectedDocumentType === 'convention' && !selectedFormation) || (selectedDocumentType === 'emargement' && !selectedProject) || (selectedDocumentType === 'qualiopi' && !selectedEvaluation) || (selectedDocumentType === 'attestation' && !selectedEvaluation) || (selectedDocumentType === 'diplome' && !selectedEvaluation),
                                     className: 'bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50'
                                 }, isGenerating ? 'Génération...' : 'Prod Test')
                             ])
@@ -1173,7 +1213,10 @@ function TemplateBuilderPage() {
                             (selectedDocumentType === 'attestation' && !selectedEvaluation) ?
                                 React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                     'Sélectionnez une évaluation pour commencer') :
-                            (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement' && selectedDocumentType !== 'qualiopi' && selectedDocumentType !== 'attestation')) ?
+                            (selectedDocumentType === 'diplome' && !selectedEvaluation) ?
+                                React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
+                                    'Sélectionnez une évaluation pour commencer') :
+                            (!selectedDocumentType || (selectedDocumentType !== 'pdc' && selectedDocumentType !== 'convocation' && selectedDocumentType !== 'convention' && selectedDocumentType !== 'emargement' && selectedDocumentType !== 'qualiopi' && selectedDocumentType !== 'attestation' && selectedDocumentType !== 'diplome')) ?
                                 React.createElement('div', { className: 'flex items-center justify-center h-full text-gray-500' },
                                     'Sélectionnez un type de document pour commencer') :
                             isGenerating ?

@@ -7,6 +7,7 @@ function EvaluationListPage() {
 
     const [selectedEval, setSelectedEval] = useState(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
 
     useEffect(() => {
         lucide.createIcons();
@@ -89,26 +90,29 @@ function EvaluationListPage() {
             key: 'stagiaire_prenom',
             label: 'Stagiaire',
             sortable: true,
-            render: (value, row) => React.createElement('div', {}, [
+            className: 'max-w-xs',
+            render: (value, row) => React.createElement('div', {
+                className: 'max-w-xs'
+            }, [
                 React.createElement('div', {
                     key: 'name',
-                    className: 'text-sm font-medium text-gray-900'
+                    className: 'text-sm font-medium text-gray-900 truncate'
                 }, `${row.stagiaire_prenom || ''} ${row.stagiaire_nom || ''}`.trim()),
                 React.createElement('div', {
                     key: 'societe',
-                    className: 'text-sm text-gray-600'
+                    className: 'text-sm text-gray-600 truncate'
                 }, row.stagiaire_societe || ''),
                 React.createElement('div', {
                     key: 'email',
-                    className: 'text-sm text-gray-500'
+                    className: 'text-sm text-gray-500 truncate'
                 }, row.stagiaire_email || '')
             ])
         },
         {
             key: 'formation_pdc',
-            label: 'Formation',
+            label: 'PDC',
             sortable: true,
-            render: (value, row) => row.formation?.pdc?.ref || (row.formation ? 'N/A' : 'Formation supprimée')
+            render: (value, row) => row.formation?.pdc?.pdc_number || (row.formation ? 'N/A' : 'Formation supprimée')
         },
         {
             key: 'formation_prj',
@@ -117,10 +121,89 @@ function EvaluationListPage() {
             render: (value, row) => row.formation?.prj || (row.formation ? 'N/A' : '-')
         },
         {
+            key: 'formation_logiciel',
+            label: 'Logiciel',
+            sortable: true,
+            render: (value, row) => {
+                // Récupérer le logo et le nom avec logique de priorité
+                let logo = null;
+                let nom = null;
+
+                // Priorité 1: Logiciel du PDC
+                if (row.formation?.pdc?.logiciel?.nom) {
+                    logo = row.formation.pdc.logiciel.logo;
+                    nom = row.formation.pdc.logiciel.nom;
+                }
+                // Priorité 2: Logiciel direct du projet
+                else if (row.formation?.logiciel?.nom) {
+                    logo = row.formation.logiciel.logo;
+                    nom = row.formation.logiciel.nom;
+                }
+                // Aucun logiciel trouvé
+                else {
+                    return row.formation ? 'N/A' : '-';
+                }
+
+                // Si pas de logo, afficher juste le nom
+                if (!logo) {
+                    return nom;
+                }
+
+                // Afficher logo + nom
+                return React.createElement('div', {
+                    className: 'flex items-center gap-2'
+                }, [
+                    React.createElement('img', {
+                        key: 'logo-img',
+                        src: logo,
+                        alt: nom,
+                        className: 'w-6 h-6 object-contain rounded',
+                        onError: (e) => {
+                            e.target.style.display = 'none';
+                        }
+                    }),
+                    React.createElement('span', {
+                        key: 'nom'
+                    }, nom)
+                ]);
+            }
+        },
+        {
             key: 'formation_formateur',
             label: 'Formateur',
             sortable: true,
             render: (value, row) => row.formation?.formateur ? `${row.formation.formateur.prenom || ''} ${row.formation.formateur.nom || ''}`.trim() : (row.formation ? 'N/A' : '-')
+        },
+        {
+            key: 'formation_jours',
+            label: 'Jour',
+            sortable: true,
+            render: (value, row) => {
+                // Priorité 1: Durée en jours du PDC
+                if (row.formation?.pdc?.duree_en_jour != null) {
+                    return `${row.formation.pdc.duree_en_jour}j`;
+                }
+
+                // Priorité 2: Durée du projet (en heures) divisée par 7
+                if (row.formation?.duree) {
+                    const dureeStr = row.formation.duree.toString().trim();
+                    // Extraire le nombre (peut être "21h", "3j", "21", etc.)
+                    const match = dureeStr.match(/(\d+\.?\d*)/);
+                    if (match) {
+                        const value = parseFloat(match[1]);
+                        // Si c'est déjà en jours (format "3j")
+                        if (dureeStr.toLowerCase().includes('j')) {
+                            return `${value}j`;
+                        }
+                        // Sinon on suppose que c'est en heures, diviser par 7
+                        const jours = Math.round((value / 7) * 10) / 10;
+                        return `${jours}j`;
+                    }
+                }
+
+                // Aucune durée trouvée
+                return row.formation ? 'N/A' : '-';
+            }
         },
         {
             key: 'satisf_niveau_global',
@@ -140,6 +223,30 @@ function EvaluationListPage() {
             ])
         },
         {
+            key: 'froid_satisfaction_globale',
+            label: 'Satisfaction à froid',
+            sortable: true,
+            render: (value) => {
+                if (value !== null && value !== undefined) {
+                    return React.createElement('div', {
+                        className: 'flex items-center gap-1'
+                    }, [
+                        React.createElement('span', {
+                            key: 'value',
+                            className: 'text-sm font-medium text-gray-900'
+                        }, value),
+                        React.createElement('span', {
+                            key: 'max',
+                            className: 'text-sm text-gray-500'
+                        }, '/ 5')
+                    ]);
+                }
+                return React.createElement('span', {
+                    className: 'text-sm text-gray-400'
+                }, '-');
+            }
+        },
+        {
             key: 'statut',
             label: 'Statut',
             sortable: true,
@@ -152,6 +259,38 @@ function EvaluationListPage() {
                             : 'bg-yellow-100 text-yellow-800'
                     }`
                 }, value || 'À traiter');
+            }
+        },
+        {
+            key: 'evaluation_froid_token',
+            label: 'Lien à froid',
+            sortable: false,
+            render: (value, row) => {
+                if (!value) return React.createElement('span', { className: 'text-xs text-gray-400' }, '-');
+
+                const froidUrl = `${window.location.origin}${window.location.pathname}#/evaluation-froid/${value}`;
+
+                const copyToClipboard = (e) => {
+                    e.stopPropagation(); // Empêcher l'ouverture de la vue détaillée
+                    navigator.clipboard.writeText(froidUrl).then(() => {
+                        alert('Lien copié dans le presse-papiers !');
+                    }).catch(err => {
+                        console.error('Erreur lors de la copie:', err);
+                        alert('Impossible de copier le lien');
+                    });
+                };
+
+                return React.createElement('button', {
+                    onClick: copyToClipboard,
+                    className: 'inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors'
+                }, [
+                    React.createElement('i', {
+                        key: 'icon',
+                        'data-lucide': 'copy',
+                        className: 'w-3 h-3'
+                    }),
+                    React.createElement('span', { key: 'text' }, 'Copier')
+                ]);
             }
         }
     ];
@@ -172,16 +311,28 @@ function EvaluationListPage() {
     }
 
     // Vue tableau
-    return React.createElement(window.TableView, {
-        data: evaluations,
-        columns: columns,
-        title: "Évaluations",
-        subtitle: `${evaluations.length} évaluation${evaluations.length > 1 ? 's' : ''} reçue${evaluations.length > 1 ? 's' : ''}`,
-        loading: loading,
-        onRowClick: handleViewDetail,
-        onDelete: handleDelete,
-        searchableFields: ['stagiaire_nom', 'stagiaire_prenom', 'stagiaire_email', 'stagiaire_societe', 'stagiaire_fonction', 'formation.prj', 'formation.pdc.ref']
-    });
+    return React.createElement('div', {}, [
+        // TableView
+        React.createElement(window.TableView, {
+            key: 'table',
+            data: evaluations,
+            columns: columns,
+            title: "Évaluations",
+            subtitle: `${evaluations.length} évaluation${evaluations.length > 1 ? 's' : ''} reçue${evaluations.length > 1 ? 's' : ''}`,
+            loading: loading,
+            onImport: () => setShowImportModal(true),
+            onRowClick: handleViewDetail,
+            onDelete: handleDelete,
+            searchableFields: ['stagiaire_nom', 'stagiaire_prenom', 'stagiaire_email', 'stagiaire_societe', 'stagiaire_fonction', 'formation.prj', 'formation.pdc.ref', 'formation.pdc.logiciel.nom', 'formation.logiciel.nom']
+        }),
+
+        // Modal d'import
+        showImportModal && React.createElement(window.ImportEvaluationsModal, {
+            key: 'import-modal',
+            show: showImportModal,
+            onClose: () => setShowImportModal(false)
+        })
+    ]);
 }
 
 // Vue détaillée d'une évaluation
@@ -385,6 +536,9 @@ function createDetailView(evaluation, onClose, auth, updateFormateurQualiopi, on
                     { label: "Niveau global", value: evaluation.satisf_niveau_global }
                 ], evaluation.satisf_commentaires),
 
+                // Section Évaluation à froid
+                createEvaluationFroidSection(evaluation),
+
                 // Section Qualiopi
                 React.createElement(QualiopiSection, {
                     key: 'qualiopi',
@@ -482,6 +636,187 @@ function createDetailSection(title, items, comments) {
                 className: "text-sm text-gray-700 mt-1"
             }, comments)
         ])
+    ]);
+}
+
+// Section pour l'évaluation à froid
+function createEvaluationFroidSection(evaluation) {
+    const hasFroidData = evaluation.froid_satisfaction_globale !== null && evaluation.froid_satisfaction_globale !== undefined;
+    const froidToken = evaluation.evaluation_froid_token;
+    const froidUrl = froidToken ? `${window.location.origin}${window.location.pathname}#/evaluation-froid/${froidToken}` : null;
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('Lien copié dans le presse-papiers !');
+        }).catch(err => {
+            console.error('Erreur lors de la copie:', err);
+            alert('Impossible de copier le lien');
+        });
+    };
+
+    return React.createElement('div', {
+        key: 'evaluation-froid',
+        className: "bg-white rounded-lg border border-gray-200 p-6"
+    }, [
+        // En-tête
+        React.createElement('div', {
+            key: 'header',
+            className: "flex items-center justify-between mb-6"
+        }, [
+            React.createElement('h2', {
+                key: 'title',
+                className: "text-lg font-semibold text-gray-900"
+            }, "Évaluation à froid (30 jours)"),
+            froidUrl && React.createElement('button', {
+                key: 'copy-link',
+                onClick: () => copyToClipboard(froidUrl),
+                className: "inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+            }, [
+                React.createElement('i', {
+                    key: 'icon',
+                    'data-lucide': 'copy',
+                    className: "w-4 h-4"
+                }),
+                "Copier le lien"
+            ])
+        ]),
+
+        // Contenu
+        hasFroidData ? React.createElement('div', {
+            key: 'content',
+            className: "space-y-6"
+        }, [
+            // Section: Mise en pratique
+            React.createElement('div', { key: 'section1' }, [
+                React.createElement('h3', {
+                    key: 'title',
+                    className: "text-sm font-medium text-gray-900 mb-3"
+                }, "Mise en pratique de la formation"),
+                React.createElement('div', {
+                    key: 'grid',
+                    className: "grid grid-cols-2 gap-4"
+                }, [
+                    createFroidBooleanItem("Appliquer les connaissances", evaluation.froid_appliquer_connaissances),
+                    createFroidBooleanItem("Mieux appréhender", evaluation.froid_mieux_apprehender),
+                    createFroidBooleanItem("Faciliter le quotidien", evaluation.froid_faciliter_quotidien),
+                    createFroidBooleanItem("Améliorer l'efficacité", evaluation.froid_ameliorer_efficacite),
+                    createFroidBooleanItem("Développer des compétences", evaluation.froid_developper_competences)
+                ]),
+                evaluation.froid_autres_precisions && React.createElement('div', {
+                    key: 'autres',
+                    className: "mt-4 p-3 bg-gray-50 rounded-lg"
+                }, [
+                    React.createElement('p', {
+                        key: 'label',
+                        className: "text-xs font-medium text-gray-500 uppercase mb-1"
+                    }, "Autres bénéfices"),
+                    React.createElement('p', {
+                        key: 'text',
+                        className: "text-sm text-gray-700"
+                    }, evaluation.froid_autres_precisions)
+                ])
+            ]),
+
+            // Section: Bilan
+            React.createElement('div', { key: 'section2' }, [
+                React.createElement('h3', {
+                    key: 'title',
+                    className: "text-sm font-medium text-gray-900 mb-3"
+                }, "Bilan de la formation"),
+                React.createElement('div', {
+                    key: 'grid',
+                    className: "grid grid-cols-2 gap-4"
+                }, [
+                    createFroidBooleanItem("Répondu aux attentes", evaluation.froid_repondu_attentes),
+                    createFroidBooleanItem("Atteint les objectifs", evaluation.froid_atteint_objectifs),
+                    createFroidBooleanItem("Adéquation métier", evaluation.froid_adequation_metier)
+                ])
+            ]),
+
+            // Section: Satisfaction globale
+            React.createElement('div', { key: 'section3' }, [
+                React.createElement('h3', {
+                    key: 'title',
+                    className: "text-sm font-medium text-gray-900 mb-3"
+                }, "Satisfaction globale"),
+                React.createElement('div', {
+                    key: 'grid',
+                    className: "grid grid-cols-2 gap-4"
+                }, [
+                    createFroidBooleanItem("Recommandation", evaluation.froid_recommandation),
+                    React.createElement('div', { key: 'satisfaction' }, [
+                        React.createElement('span', {
+                            key: 'label',
+                            className: "text-xs font-medium text-gray-500 uppercase"
+                        }, "Satisfaction globale"),
+                        React.createElement('div', {
+                            key: 'value',
+                            className: "flex items-center gap-2 mt-1"
+                        }, [
+                            React.createElement('span', {
+                                key: 'rating',
+                                className: "text-2xl font-bold text-gray-900"
+                            }, evaluation.froid_satisfaction_globale),
+                            React.createElement('span', {
+                                key: 'max',
+                                className: "text-sm text-gray-500"
+                            }, '/ 5')
+                        ])
+                    ])
+                ]),
+                evaluation.froid_commentaires_satisfaction && React.createElement('div', {
+                    key: 'commentaires',
+                    className: "mt-4 p-3 bg-gray-50 rounded-lg"
+                }, [
+                    React.createElement('p', {
+                        key: 'label',
+                        className: "text-xs font-medium text-gray-500 uppercase mb-1"
+                    }, "Commentaires"),
+                    React.createElement('p', {
+                        key: 'text',
+                        className: "text-sm text-gray-700"
+                    }, evaluation.froid_commentaires_satisfaction)
+                ])
+            ])
+        ]) : React.createElement('div', {
+            key: 'empty',
+            className: "text-center py-8"
+        }, [
+            React.createElement('i', {
+                key: 'icon',
+                'data-lucide': 'clock',
+                className: "w-12 h-12 text-gray-400 mx-auto mb-3"
+            }),
+            React.createElement('p', {
+                key: 'text',
+                className: "text-gray-600"
+            }, evaluation.evaluation_froid_sent_at
+                ? "En attente de la réponse du stagiaire"
+                : "Lien d'évaluation à froid non encore envoyé"
+            )
+        ])
+    ]);
+}
+
+// Helper pour afficher un item boolean (Oui/Non)
+function createFroidBooleanItem(label, value) {
+    return React.createElement('div', { key: label }, [
+        React.createElement('span', {
+            key: 'label',
+            className: "text-xs font-medium text-gray-500 uppercase"
+        }, label),
+        React.createElement('div', {
+            key: 'value',
+            className: "mt-1"
+        }, React.createElement('span', {
+            className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                value === true
+                    ? 'bg-green-100 text-green-800'
+                    : value === false
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+            }`
+        }, value === true ? 'Oui' : value === false ? 'Non' : 'N/A'))
     ]);
 }
 

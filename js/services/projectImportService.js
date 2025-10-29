@@ -138,15 +138,36 @@ async function findPDC(supabase, pdcNumber) {
 }
 
 /**
+ * Génère les variations de domaine email pour Arkance
+ * @param {string} email - Email à varier
+ * @returns {Array<string>} - Liste d'emails avec variations de domaine
+ */
+function getEmailVariations(email) {
+    if (!email || !email.includes('@')) return [email];
+
+    const [localPart] = email.split('@');
+    const domains = [
+        '@arkance.world',
+        '@arkance-systems.com',
+        '@arkance-systems.fr',
+        '@arkance.com',
+        '@arkance.fr'
+    ];
+
+    return domains.map(domain => `${localPart}${domain}`);
+}
+
+/**
  * Recherche ou crée un utilisateur (formateur ou commercial)
  * Utilise plusieurs stratégies de recherche pour trouver les utilisateurs malgré les variations de casse et d'ordre
  * Si l'utilisateur n'existe pas, le crée automatiquement avec un compte auth.users et user_profile
  * @param {Object} supabase - Client Supabase
  * @param {string} fullName - Nom complet (prénom + nom)
  * @param {string} roleType - 'formateur' ou 'commercial'
+ * @param {string} email - Email optionnel pour recherche supplémentaire (gère les accents)
  * @returns {Promise<string|null>} - ID de l'utilisateur
  */
-async function findOrCreateUser(supabase, fullName, roleType) {
+async function findOrCreateUser(supabase, fullName, roleType, email = null) {
     if (!fullName) {
         return null;
     }
@@ -208,6 +229,25 @@ async function findOrCreateUser(supabase, fullName, roleType) {
         return profile.id;
     }
 
+    // Stratégie 1: Recherche par email (la plus fiable, évite les problèmes d'accents)
+    // Teste toutes les variations de domaine Arkance
+    if (email) {
+        const emailVariations = getEmailVariations(email);
+
+        for (const emailVariation of emailVariations) {
+            const { data: result1, error: error1 } = await supabase
+                .from('user_profile')
+                .select('id, nom, prenom, email')
+                .ilike('email', emailVariation)
+                .maybeSingle();
+
+            if (!error1 && result1) {
+                console.log(`✓ Utilisateur trouvé (stratégie 1 - email): ${email} -> ${result1.prenom} ${result1.nom} (${result1.id})`);
+                return result1.id;
+            }
+        }
+    }
+
     // Nettoyer et séparer le nom
     const nameParts = fullName.trim().split(/\s+/); // Split par espaces multiples
     if (nameParts.length < 2) {
@@ -215,62 +255,60 @@ async function findOrCreateUser(supabase, fullName, roleType) {
         return null;
     }
 
-    // Stratégie 1: Prénom Nom (ordre standard)
-    const prenom1 = nameParts[0];
-    const nom1 = nameParts.slice(1).join(' ');
-
-    const { data: result1, error: error1 } = await supabase
-        .from('user_profile')
-        .select('id')
-        .ilike('nom', nom1)
-        .ilike('prenom', prenom1)
-        .eq('fonction_id', fonctionId)
-        .maybeSingle();
-
-    if (!error1 && result1) {
-        console.log(`✓ Utilisateur trouvé (stratégie 1): ${fullName} -> ${result1.id}`);
-        return result1.id;
-    }
-
-    // Stratégie 2: Nom Prénom (ordre inversé)
-    const nom2 = nameParts[0];
-    const prenom2 = nameParts.slice(1).join(' ');
+    // Stratégie 2: Prénom Nom (ordre standard)
+    // Ne filtre PAS par fonction_id pour permettre les multi-rôles
+    const prenom2 = nameParts[0];
+    const nom2 = nameParts.slice(1).join(' ');
 
     const { data: result2, error: error2 } = await supabase
         .from('user_profile')
         .select('id')
         .ilike('nom', nom2)
         .ilike('prenom', prenom2)
-        .eq('fonction_id', fonctionId)
         .maybeSingle();
 
     if (!error2 && result2) {
-        console.log(`✓ Utilisateur trouvé (stratégie 2 - ordre inversé): ${fullName} -> ${result2.id}`);
+        console.log(`✓ Utilisateur trouvé (stratégie 2 - Prénom Nom): ${fullName} -> ${result2.id}`);
         return result2.id;
     }
 
-    // Stratégie 3: Recherche partielle dans nom OU prénom
-    const searchPattern = `%${fullName}%`;
+    // Stratégie 3: Nom Prénom (ordre inversé)
+    const nom3 = nameParts[0];
+    const prenom3 = nameParts.slice(1).join(' ');
+
     const { data: result3, error: error3 } = await supabase
         .from('user_profile')
+        .select('id')
+        .ilike('nom', nom3)
+        .ilike('prenom', prenom3)
+        .maybeSingle();
+
+    if (!error3 && result3) {
+        console.log(`✓ Utilisateur trouvé (stratégie 3 - ordre inversé): ${fullName} -> ${result3.id}`);
+        return result3.id;
+    }
+
+    // Stratégie 4: Recherche partielle dans nom OU prénom
+    const searchPattern = `%${fullName}%`;
+    const { data: result4, error: error4 } = await supabase
+        .from('user_profile')
         .select('id, nom, prenom')
-        .eq('fonction_id', fonctionId)
         .or(`nom.ilike.${searchPattern},prenom.ilike.${searchPattern}`)
         .limit(1)
         .maybeSingle();
 
-    if (!error3 && result3) {
-        console.log(`✓ Utilisateur trouvé (stratégie 3 - partielle): ${fullName} -> ${result3.prenom} ${result3.nom} (${result3.id})`);
-        return result3.id;
+    if (!error4 && result4) {
+        console.log(`✓ Utilisateur trouvé (stratégie 4 - partielle): ${fullName} -> ${result4.prenom} ${result4.nom} (${result4.id})`);
+        return result4.id;
     }
 
     // Aucune stratégie n'a trouvé l'utilisateur - CRÉER AUTOMATIQUEMENT
     console.log(`⚙ Création automatique de l'utilisateur: "${fullName}" (${roleType})`);
 
     try {
-        // Préparer les données
-        const prenom = prenom1;
-        const nom = nom1;
+        // Préparer les données (utilise la stratégie 2 - Prénom Nom)
+        const prenom = prenom2;
+        const nom = nom2;
 
         // Fonction pour nettoyer les caractères accentués et spéciaux
         const normalizeString = (str) => {
@@ -439,6 +477,156 @@ async function updateProject(supabase, projectId, updateData) {
 }
 
 /**
+ * Normalise une chaîne pour la comparaison (sans accents, minuscules, espaces normalisés)
+ * @param {string} str - Chaîne à normaliser
+ * @returns {string} - Chaîne normalisée
+ */
+function normalizeString(str) {
+    if (!str) return '';
+    return str
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Retirer les accents
+        .replace(/[^a-z0-9\s]/g, ' ')     // Remplacer caractères spéciaux par espace
+        .replace(/\s+/g, ' ')             // Normaliser les espaces
+        .trim();
+}
+
+/**
+ * Trouve l'agence Arkance correspondant à une adresse
+ * Utilise plusieurs stratégies : code postal, ville, mots-clés
+ * @param {Object} supabase - Client Supabase
+ * @param {string} address - Adresse de formation depuis le CSV
+ * @returns {Promise<Object|null>} - {id, nom, adresse} de l'agence ou null
+ */
+async function matchAgenceArkance(supabase, address) {
+    if (!address) return null;
+
+    // Charger toutes les agences
+    const { data: agences, error } = await supabase
+        .from('agence')
+        .select('id, nom, adresse');
+
+    if (error || !agences || agences.length === 0) {
+        console.warn('Impossible de charger les agences:', error?.message);
+        return null;
+    }
+
+    const addressNorm = normalizeString(address);
+
+    // Stratégie 1 : Recherche par code postal (5 chiffres)
+    const codePostalMatch = address.match(/\b(\d{5})\b/);
+    if (codePostalMatch) {
+        const codePostal = codePostalMatch[1];
+        const agence = agences.find(a => a.adresse && a.adresse.includes(codePostal));
+        if (agence) {
+            console.log(`✓ Agence trouvée par code postal "${codePostal}": ${agence.nom}`);
+            return agence;
+        }
+    }
+
+    // Stratégie 2 : Recherche par ville dans le nom de l'agence
+    for (const agence of agences) {
+        const nomNorm = normalizeString(agence.nom);
+
+        // Vérifier si le nom de l'agence apparaît dans l'adresse
+        if (addressNorm.includes(nomNorm)) {
+            console.log(`✓ Agence trouvée par nom "${agence.nom}"`);
+            return agence;
+        }
+
+        // Cas spéciaux pour les noms composés
+        const nomParts = nomNorm.split(' ');
+        if (nomParts.length > 1) {
+            // Ex: "VOISINS LE BRETONNEUX" → chercher "voisins"
+            if (addressNorm.includes(nomParts[0])) {
+                console.log(`✓ Agence trouvée par début de nom "${nomParts[0]}" → ${agence.nom}`);
+                return agence;
+            }
+        }
+    }
+
+    // Stratégie 3 : Recherche par mots-clés distinctifs dans l'adresse de l'agence
+    for (const agence of agences) {
+        const adresseAgenceNorm = normalizeString(agence.adresse);
+
+        // Extraire les mots significatifs (> 4 caractères)
+        const motsAgence = adresseAgenceNorm.split(' ').filter(mot => mot.length > 4);
+
+        // Si au moins 2 mots significatifs matchent, c'est probablement la bonne agence
+        let matchCount = 0;
+        for (const mot of motsAgence) {
+            if (addressNorm.includes(mot)) {
+                matchCount++;
+            }
+        }
+
+        if (matchCount >= 2) {
+            console.log(`✓ Agence trouvée par mots-clés (${matchCount} matches): ${agence.nom}`);
+            return agence;
+        }
+    }
+
+    console.log(`⚠ Aucune agence Arkance trouvée pour: "${address}"`);
+    return null;
+}
+
+/**
+ * Analyse l'adresse et détermine le type de lieu + trouve l'agence Arkance si applicable
+ * @param {Object} supabase - Client Supabase
+ * @param {string} address - Adresse de formation depuis le CSV
+ * @returns {Promise<Object>} - {lieu, agenceId, adresse}
+ */
+async function analyzeLieuAndAgence(supabase, address) {
+    if (!address) {
+        return {
+            lieu: "Dans vos locaux",
+            agenceId: null,
+            adresse: address
+        };
+    }
+
+    const addressUpper = address.toUpperCase();
+
+    // Si contient FOAD ou A DISTANCE → À distance
+    if (addressUpper.includes('FOAD') || addressUpper.includes('A DISTANCE') || addressUpper.includes('À DISTANCE')) {
+        return {
+            lieu: "À distance",
+            agenceId: null,
+            adresse: address
+        };
+    }
+
+    // Si commence par ARKANCE → Dans nos locaux
+    if (addressUpper.startsWith('ARKANCE')) {
+        const agence = await matchAgenceArkance(supabase, address);
+
+        if (agence) {
+            return {
+                lieu: "Dans nos locaux",
+                agenceId: agence.id,
+                adresse: agence.adresse // Utiliser l'adresse normalisée de l'agence
+            };
+        } else {
+            // Agence Arkance mais pas trouvée dans la base → garder l'adresse du CSV
+            return {
+                lieu: "Dans nos locaux",
+                agenceId: null,
+                adresse: address
+            };
+        }
+    }
+
+    // Sinon → Dans vos locaux
+    return {
+        lieu: "Dans vos locaux",
+        agenceId: null,
+        adresse: address
+    };
+}
+
+/**
+ * @deprecated Utiliser analyzeLieuAndAgence() à la place
  * Détermine le type de lieu à partir d'une adresse
  * @param {string} address - Adresse de formation
  * @returns {string} - Type de lieu ("Dans nos locaux", "Dans vos locaux", "À distance")
@@ -478,6 +666,9 @@ async function createFormationSessions(supabase, projectId, entrepriseId, sessio
         return [];
     }
 
+    // Analyser le lieu et trouver l'agence une seule fois pour toutes les sessions
+    const lieuData = await analyzeLieuAndAgence(supabase, location);
+
     const events = [];
 
     sessions.forEach((sessionDates, index) => {
@@ -506,7 +697,7 @@ async function createFormationSessions(supabase, projectId, entrepriseId, sessio
         });
         const description = `Session du ${datesFormatted[0]} au ${datesFormatted[datesFormatted.length - 1]}`;
 
-        events.push({
+        const event = {
             titre,
             description,
             date_debut: dateDebut.toISOString(),
@@ -514,11 +705,18 @@ async function createFormationSessions(supabase, projectId, entrepriseId, sessio
             type_evenement: 'formation',
             statut: 'planifie',
             priorite: 'normale',
-            lieu: determineLieuFromAddress(location),
-            adresse: location,
+            lieu: lieuData.lieu,
+            adresse: lieuData.adresse,
             projet_id: projectId,
             entreprise_cliente_id: entrepriseId
-        });
+        };
+
+        // Ajouter agence_id seulement si une agence a été trouvée
+        if (lieuData.agenceId) {
+            event.agence_id = lieuData.agenceId;
+        }
+
+        events.push(event);
     });
 
     // Insérer tous les événements
@@ -562,6 +760,7 @@ async function analyzeImportData(supabase, rows) {
     const entrepriseNames = new Set(existingEntreprises?.map(e => e.nom) || []);
 
     // Helper pour vérifier si un utilisateur existe (sans le créer)
+    // Ne filtre PAS par fonction_id pour permettre les multi-rôles
     const userExists = async (fullName, roleType) => {
         if (!fullName || fullName === 'Subcontractor FRANCE') {
             return true; // Considérer comme existant pour ne pas le lister
@@ -569,12 +768,6 @@ async function analyzeImportData(supabase, rows) {
 
         const nameParts = fullName.trim().split(/\s+/);
         if (nameParts.length < 2) return true;
-
-        const fonctionMap = {
-            'formateur': 'accae4a9-7a0f-43ea-949d-a2b58fb58a92',
-            'commercial': '65b79c9a-6de8-4da3-8ecd-b63bac6ab174'
-        };
-        const fonctionId = fonctionMap[roleType];
 
         // Essayer les 3 stratégies de recherche
         const prenom1 = nameParts[0];
@@ -586,7 +779,6 @@ async function analyzeImportData(supabase, rows) {
             .select('id')
             .ilike('nom', nom1)
             .ilike('prenom', prenom1)
-            .eq('fonction_id', fonctionId)
             .maybeSingle();
         if (r1) return true;
 
@@ -596,7 +788,6 @@ async function analyzeImportData(supabase, rows) {
             .select('id')
             .ilike('nom', prenom1)
             .ilike('prenom', nom1)
-            .eq('fonction_id', fonctionId)
             .maybeSingle();
         if (r2) return true;
 
@@ -604,7 +795,6 @@ async function analyzeImportData(supabase, rows) {
         const { data: r3 } = await supabase
             .from('user_profile')
             .select('id')
-            .eq('fonction_id', fonctionId)
             .or(`nom.ilike.%${fullName}%,prenom.ilike.%${fullName}%`)
             .limit(1)
             .maybeSingle();
@@ -701,6 +891,20 @@ async function importProjects(supabase, rows, onProgress = null) {
             // 2. Trouver le PDC
             const pdcId = await findPDC(supabase, parsed.pdcNumber);
 
+            // 2b. Récupérer le logiciel depuis le PDC si disponible (pour le nom du projet et les sessions)
+            let software = 'Formation';
+            if (pdcId) {
+                const { data: pdcData } = await supabase
+                    .from('pdc')
+                    .select('logiciel')
+                    .eq('id', pdcId)
+                    .single();
+
+                if (pdcData && pdcData.logiciel) {
+                    software = pdcData.logiciel;
+                }
+            }
+
             // 3. Trouver ou créer le formateur
             const formateurId = await findOrCreateUser(supabase, parsed.formateur, 'formateur');
 
@@ -749,7 +953,7 @@ async function importProjects(supabase, rows, onProgress = null) {
                 }
             } else {
                 // Nouveau projet, le créer
-                const projectName = `${parsed.companyName} - ${parsed.software}`;
+                const projectName = `${parsed.companyName} - ${software}`;
 
                 const projectData = {
                     netsuite_id: parsed.netsuiteId,
@@ -762,7 +966,6 @@ async function importProjects(supabase, rows, onProgress = null) {
                     pdc_id: pdcId,
                     formateur_id: formateurId,
                     commercial_id: commercialId,
-                    nombre_stagiaire: parsed.numberOfClients,
                     lieu_projet: parsed.location,
                     heures_formation: row['Training Hours'] || ''
                 };
@@ -786,7 +989,7 @@ async function importProjects(supabase, rows, onProgress = null) {
                     parsed.sessions,
                     parsed.hours,
                     parsed.location,
-                    parsed.software
+                    software
                 );
                 results.sessionsCreated += sessions.length;
             } else {
@@ -794,7 +997,7 @@ async function importProjects(supabase, rows, onProgress = null) {
             }
 
             results.success++;
-            const projectName = `${parsed.companyName} - ${parsed.software}`;
+            const projectName = `${parsed.companyName} - ${software}`;
 
             if (isUpdate) {
                 results.projectsUpdated.push({
@@ -825,7 +1028,9 @@ async function importProjects(supabase, rows, onProgress = null) {
 // Export global
 window.projectImportService = {
     analyzeImportData,
-    importProjects
+    importProjects,
+    findOrCreateUser,        // Crée auth.users + user_profile (email @arkance.world)
+    findOrCreateEntreprise   // Crée les entreprises clientes
 };
 
 })();

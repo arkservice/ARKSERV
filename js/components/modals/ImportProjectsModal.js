@@ -256,13 +256,13 @@ const ImportProjectsModal = ({ show, onClose }) => {
                                 className: "flex-1 text-sm"
                             }, [
                                 React.createElement('p', {
-                                    key: 'line',
+                                    key: `${rowIdx}-line`,
                                     className: "font-medium text-gray-700"
                                 }, `Ligne ${rowItem.index}`),
-                                React.createElement('p', { key: 'customer' }, `Client: ${rowItem.data.Customer}`),
-                                React.createElement('p', { key: 'software' }, `Logiciel: ${rowItem.data.Software}`),
-                                React.createElement('p', { key: 'dates' }, `Dates: ${rowItem.data['Training Dates']}`),
-                                React.createElement('p', { key: 'formateur' }, `Formateur: ${rowItem.data.formateur}`)
+                                React.createElement('p', { key: `${rowIdx}-customer` }, `Client: ${rowItem.data.Customer}`),
+                                React.createElement('p', { key: `${rowIdx}-pdc` }, `PDC: ${rowItem.data['Link to Documents']}`),
+                                React.createElement('p', { key: `${rowIdx}-dates` }, `Dates: ${rowItem.data['Training Dates']}`),
+                                React.createElement('p', { key: `${rowIdx}-formateur` }, `Formateur: ${rowItem.data['Project Resource']}`)
                             ])
                         ])
                     ))
