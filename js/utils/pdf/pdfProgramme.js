@@ -269,9 +269,15 @@ function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, pos
 
     // Limites de la section - commence juste 2mm après le début
     const lignesStartY = sectionStartY + 2;
-    const lignesEndY = sectionStartY + sectionHeight;
 
-    // Récupérer tous les points
+    // IMPORTANT: Calculer dynamiquement la position du footer pour qu'il soit toujours en bas de page
+    // Le footer doit être plaqué en bas de la page A4 (297mm) quelle que soit sa hauteur
+    const pageHeight = 297; // Hauteur page A4 en mm
+    const footerHeight = positions.footer?.height || 22;
+    const footerStartY = pageHeight - footerHeight; // Calcul dynamique: footer toujours en bas
+    const lignesEndY = Math.min(sectionStartY + sectionHeight, footerStartY - 2); // 2mm de marge de sécurité
+
+    // Récupérer tous les points (incluant le point 13)
     const allPoints = formatProgrammeForTemplate(pdc);
 
     // Dimensions des colonnes
@@ -305,7 +311,7 @@ function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, pos
     const SPACE_BETWEEN_POINTS = 4;    // Espace entre les points
     const SPACE_BETWEEN_JOURS = 3;     // Gap vertical entre zones grises de jours différents
 
-    // Hauteur maximale disponible pour le contenu
+    // Hauteur maximale disponible pour le contenu (limitée par le début du footer)
     const maxContentHeight = lignesEndY - (lignesStartY + 2);
 
     console.log(`📏 Hauteur max disponible: ${maxContentHeight}mm (de ${lignesStartY + 2}mm à ${lignesEndY}mm)`);
@@ -426,20 +432,26 @@ function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, pos
                     }
 
                     // === TITRE DU POINT ===
-                    doc.setFontSize(8);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(...primaryColor);
-                    const titreText = `${point.numero} – ${point.titre}`;
-                    const titreLines = doc.splitTextToSize(titreText, availableWidth);
-                    doc.text(titreLines, xText, currentY);
+                    // Afficher le titre SAUF si c'est une description seule
+                    if (!point.descriptionSeulement) {
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(...primaryColor);
+                        const titreText = `${point.numero} – ${point.titre}`;
+                        const titreLines = doc.splitTextToSize(titreText, availableWidth);
+                        doc.text(titreLines, xText, currentY);
 
-                    // Avancer de la hauteur EXACTE du titre
-                    currentY += point.hauteurTitre;
+                        // Avancer de la hauteur EXACTE du titre
+                        currentY += point.hauteurTitre;
+                    }
 
                     // === DESCRIPTION ===
-                    if (point.description && point.description.trim()) {
-                        // Ajouter l'espacement calculé en Phase 1
-                        currentY += point.espaceTitreDesc;
+                    // Afficher la description SAUF si c'est un titre seul
+                    if (!point.titreSeulement && point.description && point.description.trim()) {
+                        // Ajouter l'espacement calculé en Phase 1 (sauf si description seule)
+                        if (!point.descriptionSeulement) {
+                            currentY += point.espaceTitreDesc;
+                        }
 
                         doc.setFontSize(params.descriptionSize || 7);
                         doc.setFont('helvetica', 'normal');
@@ -520,20 +532,26 @@ function renderSection4_Programme(doc, pdc, params, primaryColor, grayColor, pos
                     }
 
                     // === TITRE DU POINT ===
-                    doc.setFontSize(8);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(...primaryColor);
-                    const titreText = `${point.numero} – ${point.titre}`;
-                    const titreLines = doc.splitTextToSize(titreText, availableWidth);
-                    doc.text(titreLines, xText, yPoint);
+                    // Afficher le titre SAUF si c'est une description seule
+                    if (!point.descriptionSeulement) {
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(...primaryColor);
+                        const titreText = `${point.numero} – ${point.titre}`;
+                        const titreLines = doc.splitTextToSize(titreText, availableWidth);
+                        doc.text(titreLines, xText, yPoint);
 
-                    // Avancer de la hauteur EXACTE du titre (calculée en Phase 1)
-                    yPoint += point.hauteurTitre;
+                        // Avancer de la hauteur EXACTE du titre (calculée en Phase 1)
+                        yPoint += point.hauteurTitre;
+                    }
 
                     // === DESCRIPTION DU POINT ===
-                    if (point.description && point.description.trim()) {
-                        // Ajouter l'espacement calculé en Phase 1
-                        yPoint += point.espaceTitreDesc;
+                    // Afficher la description SAUF si c'est un titre seul
+                    if (!point.titreSeulement && point.description && point.description.trim()) {
+                        // Ajouter l'espacement calculé en Phase 1 (sauf si description seule, car déjà inclus dans hauteurContenu)
+                        if (!point.descriptionSeulement) {
+                            yPoint += point.espaceTitreDesc;
+                        }
 
                         doc.setFontSize(params.descriptionSize || 7);
                         doc.setFont('helvetica', 'normal');
@@ -617,20 +635,85 @@ function repartirPointsSurColonnes(pointsAvecHauteurs, hauteurMax, paddingFin) {
 
         // Vérifier si le point rentre dans la colonne actuelle
         const hauteurApresAjout = colonnes[colonneActuelle].hauteurTotale + hauteurNecessaire;
-
-        // Pour les colonnes 1 et 2, on teste avec le padding de fin
-        // Pour la colonne 3 (dernière), on est plus permissif
         const estDerniereColonne = colonneActuelle === 2;
         const hauteurAvecPaddingFin = hauteurApresAjout + paddingFin;
 
         console.log(`  🔍 Test: ${hauteurAvecPaddingFin.toFixed(2)}mm (actuel: ${colonnes[colonneActuelle].hauteurTotale.toFixed(2)}mm + nouveau: ${hauteurNecessaire.toFixed(2)}mm + padding: ${paddingFin}mm) vs max: ${hauteurMax}mm`);
 
-        // Si on est dans la dernière colonne, on accepte un léger dépassement
-        const seuilMax = estDerniereColonne ? hauteurMax + 3 : hauteurMax; // +3mm de tolérance pour la dernière colonne
+        // Appliquer la même limite stricte pour toutes les colonnes pour éviter tout débordement sur le footer
+        const seuilMax = hauteurMax;
 
         if (hauteurAvecPaddingFin > seuilMax && colonneActuelle < 2) {
             // Le point ne rentre pas dans la colonne actuelle
-            console.log(`  ⚠️ Point ${point.numero} NE RENTRE PAS (${hauteurApresAjout.toFixed(1)}mm > ${hauteurMax}mm)`);
+            console.log(`  ⚠️ Point ${point.numero} NE RENTRE PAS ENTIER (${hauteurAvecPaddingFin.toFixed(1)}mm > ${seuilMax}mm)`);
+
+            // === STRATÉGIE 1: Essayer de séparer titre/description ===
+            // Calculer la hauteur du titre seul avec les espacements appropriés
+            let hauteurTitreSeul;
+            if (colonneVide) {
+                hauteurTitreSeul = PADDING_TOP_ZONE + HEADER_JOUR_HEIGHT + SPACE_AFTER_HEADER + point.hauteurTitre;
+            } else if (changementJour) {
+                hauteurTitreSeul = SPACE_BETWEEN_JOURS + PADDING_TOP_ZONE + HEADER_JOUR_HEIGHT + SPACE_AFTER_HEADER + point.hauteurTitre;
+            } else {
+                hauteurTitreSeul = SPACE_BETWEEN_POINTS + point.hauteurTitre;
+            }
+
+            const hauteurTitreAvecPadding = colonnes[colonneActuelle].hauteurTotale + hauteurTitreSeul + paddingFin;
+
+            // Si le titre seul rentre ET qu'il y a une description à séparer
+            if (hauteurTitreAvecPadding <= seuilMax && point.hauteurDescription > 0) {
+                console.log(`  ✂️ SÉPARATION du point ${point.numero}: titre seul rentre (${hauteurTitreAvecPadding.toFixed(1)}mm <= ${seuilMax}mm)`);
+
+                // Créer une copie pour le titre seul
+                const pointTitre = {
+                    ...point,
+                    titreSeulement: true,
+                    hauteurContenu: point.hauteurTitre,
+                    hauteurDescription: 0
+                };
+
+                // Ajouter le titre dans la colonne actuelle
+                colonnes[colonneActuelle].points.push(pointTitre);
+                colonnes[colonneActuelle].hauteurTotale += hauteurTitreSeul;
+                console.log(`  ➕ Titre du point ${point.numero} ajouté → Col ${colonneActuelle + 1}, h=${hauteurTitreSeul.toFixed(1)}mm`);
+
+                // Finaliser la colonne actuelle avec padding
+                colonnes[colonneActuelle].hauteurTotale += paddingFin;
+                console.log(`  ✅ Colonne ${colonneActuelle + 1} finalisée: ${colonnes[colonneActuelle].hauteurTotale.toFixed(1)}mm`);
+
+                // Passer à la colonne suivante
+                const dernierJourAvantChangement = dernierJourDansColonne;
+                colonneActuelle++;
+                dernierJourDansColonne = null;
+                console.log(`  📍 PASSAGE à la colonne ${colonneActuelle + 1} pour la description`);
+
+                // Créer une copie pour la description seule
+                const pointDescription = {
+                    ...point,
+                    descriptionSeulement: true,
+                    hauteurContenu: point.hauteurDescription + point.espaceTitreDesc,
+                    hauteurTitre: 0,
+                    isFirstOfJour: false,
+                    afficherJour: true,   // Afficher header "(suite)"
+                    estSuite: true        // Marquer comme suite du jour
+                };
+
+                // Calculer hauteur pour la description dans la nouvelle colonne
+                hauteurNecessaire = PADDING_TOP_ZONE + HEADER_JOUR_HEIGHT + SPACE_AFTER_HEADER + pointDescription.hauteurContenu;
+
+                // Ajouter la description dans la nouvelle colonne
+                colonnes[colonneActuelle].points.push(pointDescription);
+                colonnes[colonneActuelle].hauteurTotale += hauteurNecessaire;
+                dernierJourDansColonne = point.jour;
+
+                console.log(`  ➕ Description du point ${point.numero} ajoutée → Col ${colonneActuelle + 1}, h=${hauteurNecessaire.toFixed(1)}mm, total=${colonnes[colonneActuelle].hauteurTotale.toFixed(1)}mm`);
+
+                // Passer au point suivant
+                continue;
+            }
+
+            // === STRATÉGIE 2: Passer le point entier à la colonne suivante ===
+            console.log(`  ↪️ Point ${point.numero} passe ENTIER à la colonne suivante`);
 
             // Finaliser la colonne actuelle avec padding
             if (colonnes[colonneActuelle].points.length > 0) {
@@ -689,7 +772,10 @@ function repartirPointsSurColonnes(pointsAvecHauteurs, hauteurMax, paddingFin) {
     });
 
     if (totalPointsRepartis !== pointsAvecHauteurs.length) {
-        console.error(`❌ ERREUR CRITIQUE : ${pointsAvecHauteurs.length - totalPointsRepartis} points manquants !`);
+        const pointsManquants = pointsAvecHauteurs.length - totalPointsRepartis;
+        console.error(`❌ ERREUR CRITIQUE : ${pointsManquants} point(s) manquant(s) !`);
+        console.error(`⚠️ Le contenu dépasse la hauteur maximale disponible. Certains points ne seront pas affichés pour éviter le débordement sur le footer.`);
+        console.error(`💡 Solution: Réduire le contenu des points ou diminuer les espacements.`);
     }
 
     return colonnes;
@@ -697,7 +783,17 @@ function repartirPointsSurColonnes(pointsAvecHauteurs, hauteurMax, paddingFin) {
 
 // === SECTION 5: FOOTER ===
 async function renderSection5_Footer(doc, params, positions) {
-    const footerSection = positions.footer || { y: 260, height: 37, width: 210 };
+    // Calculer dynamiquement la position Y du footer pour qu'il soit toujours en bas de page A4
+    const pageHeight = 297; // Hauteur page A4 en mm
+
+    const footerSection = positions.footer ? {
+        ...positions.footer,
+        y: pageHeight - positions.footer.height // Recalcul: footer plaqué en bas
+    } : {
+        y: 275, // Par défaut: 297 - 22
+        height: 22,
+        width: 210
+    };
 
     // Add background if configured
     if (params.footerBackground) {
